@@ -148,17 +148,17 @@ public class CubeSphereGenerator : MonoBehaviour
         mesh.RecalculateNormals();          // normals first: we need them to measure the slope
         Vector3[] normals = mesh.normals;
 
-        // Vertex colors from height, latitude, rivers and slope
+        // Vertex colors from height, latitude, rivers, slope, and paths
         for (int i = 0; i < totalVertices; i++)
         {
             if (biomeColor == null) { colors[i] = Color.white; continue; }
 
             float normalizedHeight = Mathf.InverseLerp(minH, maxH, heights[i]);
             float latitude = Mathf.Abs(directions[i].y);
-            // slope: 0 = flat ground, bigger = steeper (normal tilts away from "straight out")
             float slope = 1f - Mathf.Clamp01(Vector3.Dot(normals[i], directions[i]));
+            float path = planetNoise != null ? planetNoise.GetPath(directions[i]) : 0f; // Added path sampling
 
-            colors[i] = biomeColor.GetBiomeColor(normalizedHeight, latitude, rivers[i], slope, directions[i]);
+            colors[i] = biomeColor.GetBiomeColor(normalizedHeight, latitude, rivers[i], slope, directions[i], path);
         }
 
         mesh.colors = colors;
