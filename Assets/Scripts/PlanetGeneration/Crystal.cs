@@ -7,6 +7,7 @@ public class Crystal : MonoBehaviour
     public float bobSpeed = 2f;
 
     Planet1Puzzle puzzle;
+    public PlanetEnemy guardingEnemy;
     Vector3 startLocalPos;
     bool collected;
 
@@ -28,9 +29,15 @@ public class Crystal : MonoBehaviour
     void OnTriggerEnter(Collider other)
     {
         if (collected) return;
-        if (other.GetComponentInParent<PlayerController>() == null) return;
+    if (other.GetComponentInParent<PlayerController>() == null) return;
 
-        collected = true;
+    if (guardingEnemy != null)
+    {
+        Debug.Log("Defeat the enemy before collecting this crystal!");
+        return;
+    }
+
+    collected = true;
         if (puzzle != null) puzzle.CrystalCollected();
         Destroy(gameObject);
     }

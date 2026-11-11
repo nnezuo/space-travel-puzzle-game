@@ -26969,6 +26969,7 @@ GameObject:
   - component: {fileID: 346379031}
   - component: {fileID: 346379032}
   - component: {fileID: 346379033}
+  - component: {fileID: 346379034}
   m_Layer: 0
   m_Name: Planet1
   m_TagString: Untagged
@@ -27131,16 +27132,19 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 346379021}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: bdd52c6561e615045a5fd169766a2f13, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CrystalSpawner
-  crystalPrefab: {fileID: 0}
+  crystalPrefab: {fileID: 7256834517690692764, guid: a038c8c002d6a2743aded3490e4f6ec7, type: 3}
+  enemyPrefab: {fileID: 3472593552927767765, guid: 5c956b60d95ca554b861d7cac34932b1, type: 3}
   crystalCount: 3
   samples: 3000
   minSeparation: 8
-  hoverHeight: 1
+  hoverHeight: 0.5
+  enemyDistance: 2
+  enemySurfaceOffset: 0.5
 --- !u!114 &346379030
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -27148,12 +27152,11 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 346379021}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a277da781f267f348972347e925fd251, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Planet1Puzzle
-  beacon: {fileID: 2079721533}
   onProgress:
     m_PersistentCalls:
       m_Calls: []
@@ -27256,6 +27259,23 @@ MeshCollider:
   m_Convex: 0
   m_CookingOptions: 30
   m_Mesh: {fileID: 364696445}
+--- !u!114 &346379034
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 346379021}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7599853f7fa19c545a76118efe8847ff, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlanetEnemySpawner
+  enemyPrefab: {fileID: 3472593552927767765, guid: 5c956b60d95ca554b861d7cac34932b1, type: 3}
+  enemyCount: 3
+  surfaceOffset: 1
+  maxSlope: 30
+  maxAttempts: 300
 --- !u!1001 &346522892
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -59024,6 +59044,55 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 741272604}
   m_Mesh: {fileID: 10207, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!1 &741430718
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 741430720}
+  - component: {fileID: 741430719}
+  m_Layer: 0
+  m_Name: Global Volume
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &741430719
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 741430718}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 172515602e62fb746b5d573b38a5fe58, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.RenderPipelines.Core.Runtime::UnityEngine.Rendering.Volume
+  m_IsGlobal: 1
+  priority: 0
+  blendDistance: 0
+  weight: 1
+  sharedProfile: {fileID: 11400000, guid: 1d6463195502e8d4cae4f3bbc80e69bb, type: 2}
+--- !u!4 &741430720
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 741430718}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 9.12, y: 11.23, z: 2.82}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &741462224
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -75810,7 +75879,7 @@ MonoBehaviour:
     m_Bits: 1
   m_VolumeTrigger: {fileID: 0}
   m_VolumeFrameworkUpdateModeOption: 2
-  m_RenderPostProcessing: 0
+  m_RenderPostProcessing: 1
   m_Antialiasing: 0
   m_AntialiasingQuality: 2
   m_StopNaN: 0
@@ -120098,6 +120167,7 @@ MonoBehaviour:
   spinSpeed: 60
   bobHeight: 0.3
   bobSpeed: 2
+  guardingEnemy: {fileID: 0}
 --- !u!223 &1563128166
 Canvas:
   m_ObjectHideFlags: 0
@@ -136111,6 +136181,7 @@ GameObject:
   - component: {fileID: 1780686825}
   - component: {fileID: 1780686824}
   - component: {fileID: 1780686823}
+  - component: {fileID: 1780686828}
   m_Layer: 0
   m_Name: Player
   m_TagString: Player
@@ -136231,6 +136302,21 @@ Transform:
   - {fileID: 59229379}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1780686828
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1780686822}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6c7f17f91da472e4b9c8c7cc653d3e2c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerAttack
+  attackRange: 5
+  damage: 1
+  attackKey: 102
 --- !u!1001 &1781879139
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -159406,3 +159492,4 @@ SceneRoots:
   - {fileID: 835336168}
   - {fileID: 518794330}
   - {fileID: 1840887897}
+  - {fileID: 741430720}

@@ -1,16 +1,14 @@
+
 using UnityEngine;
 using UnityEngine.Events;
 
 public class Planet1Puzzle : MonoBehaviour
 {
-    [Header("Result")]
-    public GameObject beacon;            // hidden at the start, shown when solved
-
     [Header("Events (for UI / game flow)")]
-    public UnityEvent<int, int> onProgress;   // (collected, total)
+    public UnityEvent<int, int> onProgress;
     public UnityEvent onCompleted;
 
-    [Header("Temporary on-screen text (turn off when Julia's UI is ready)")]
+    [Header("Temporary on-screen text")]
     public bool showDebugText = true;
 
     public int Total { get; private set; }
@@ -21,7 +19,6 @@ public class Planet1Puzzle : MonoBehaviour
 
     void Start()
     {
-        if (beacon != null) beacon.SetActive(false);
         message = "Find the crystals!";
     }
 
@@ -40,8 +37,9 @@ public class Planet1Puzzle : MonoBehaviour
         if (Collected >= Total && Total > 0 && !IsComplete)
         {
             IsComplete = true;
-            message = "Puzzle complete! Go to the beacon.";
-            if (beacon != null) beacon.SetActive(true);
+
+            message = "MISSION COMPLETE! GO TO THE NEXT PLANET!";
+
             onCompleted?.Invoke();
         }
     }
@@ -49,6 +47,26 @@ public class Planet1Puzzle : MonoBehaviour
     void OnGUI()
     {
         if (!showDebugText) return;
-        GUI.Label(new Rect(20, 20, 500, 30), message);
+
+        if (IsComplete)
+        {
+            GUIStyle style = new GUIStyle(GUI.skin.label);
+            style.fontSize = 28;
+            style.fontStyle = FontStyle.Bold;
+            style.normal.textColor = Color.cyan;
+
+            GUI.Label(
+                new Rect(20, 20, 900, 60),
+                message,
+                style
+            );
+        }
+        else
+        {
+            GUI.Label(
+                new Rect(20, 20, 500, 30),
+                message
+            );
+        }
     }
 }

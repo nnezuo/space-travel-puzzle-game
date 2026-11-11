@@ -14,6 +14,7 @@ GameObject:
   - component: {fileID: 6542045053799706004}
   - component: {fileID: 7176559103784234297}
   - component: {fileID: 5800062092746509224}
+  - component: {fileID: 7230152181131909186}
   m_Layer: 0
   m_Name: Crystal
   m_TagString: Untagged
@@ -73,7 +74,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 31321ba15b8f8eb4c954353edc038b1d, type: 2}
+  - {fileID: 2100000, guid: 27c6e1a2eb680274bb19feabff9dcaf1, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -133,6 +134,7 @@ MonoBehaviour:
   spinSpeed: 60
   bobHeight: 0.3
   bobSpeed: 2
+  guardingEnemy: {fileID: 0}
 --- !u!223 &5800062092746509224
 Canvas:
   m_ObjectHideFlags: 0
@@ -157,3 +159,15 @@ Canvas:
   m_SortingLayerID: 0
   m_SortingOrder: 0
   m_TargetDisplay: 0
+--- !u!114 &7230152181131909186
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7256834517690692764}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: aa1e99bfa029972459f13b2b4d77a690, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DiamondMesh
