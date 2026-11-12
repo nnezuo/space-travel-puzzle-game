@@ -91,8 +91,7 @@ public class DreamGardenHUD : MonoBehaviour
         // the shared scene has two planets, so display the correct objective
         if (puzzle != null && puzzle.Ready && puzzle.PlayerInGarden) DrawGarden();
         else if (ReturnedToPlanet1AfterCompletion()) DrawJourneyEnding();
-        else if (firstPlanetPuzzle != null) DrawFirstPlanet();
-        else DrawFirstPlanetPlaceholder();
+        
         if (!string.IsNullOrEmpty(DreamSceneFlow.LastError)) PanelMessage(DreamSceneFlow.LastError, 470);
         GUI.matrix = oldMatrix;
         GUI.color = Color.white;

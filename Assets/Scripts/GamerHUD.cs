@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+
 // All the on-screen UI in one place: mission intro, objective list, message toasts,
 // gravity keys, attack key, prompts and banners. Put it on an empty object in the scene.
 public class GameHUD : MonoBehaviour
