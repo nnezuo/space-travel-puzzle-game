@@ -9,7 +9,7 @@ public class GravitySource : MonoBehaviour
     public Rule rule = Rule.Normal;
 
     [Tooltip("ON = the player's keys (1/2/3) choose the gravity here. OFF = this source's own rule is used")]
-    public bool playerCanChangeGravity = true;
+    public bool playerCanChangeGravity = false;
     public float strength = 20f;
     [Range(0.05f, 1f)] public float lowGravityMultiplier = 0.25f;
 
