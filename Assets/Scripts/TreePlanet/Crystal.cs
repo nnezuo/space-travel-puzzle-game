@@ -7,6 +7,7 @@ public class Crystal : MonoBehaviour
     public float bobSpeed = 2f;
 
     Planet1Puzzle puzzle;
+    public PlanetEnemy guardingEnemy;
     Vector3 startLocalPos;
     bool collected;
 
@@ -25,10 +26,20 @@ public class Crystal : MonoBehaviour
             Vector3.up * (Mathf.Sin(Time.time * bobSpeed) * bobHeight);
     }
 
-    void OnTriggerEnter(Collider other)
+    void OnTriggerEnter(Collider other) => TryCollect(other, true);
+    void OnTriggerStay(Collider other) => TryCollect(other, false);
+
+    void TryCollect(Collider other, bool showMessage)
     {
         if (collected) return;
         if (other.GetComponentInParent<PlayerController>() == null) return;
+
+        if (guardingEnemy != null)
+        {
+            if (showMessage)
+                GameHUD.Say("A guardian protects this crystal. Defeat it first!", GameHUD.Kind.Warning);
+            return;
+        }
 
         collected = true;
         if (puzzle != null) puzzle.CrystalCollected();

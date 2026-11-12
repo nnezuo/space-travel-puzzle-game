@@ -3,43 +3,68 @@ using UnityEngine;
 public class InterplanetaryPortal : MonoBehaviour
 {
     [Header("Targets")]
-    public Transform player;
-    public Transform destinationSpawnPoint; // Empty GameObject placed on the target planet
-    public GravitySource destinationGravity; // The GravitySource component of the target planet
+    public Transform player;                    // found automatically if empty
+    [Tooltip("Empty object on the target planet. Its green (Y) arrow must point AWAY from that planet's centre")]
+    public Transform destinationSpawnPoint;
+    public GravitySource destinationGravity;    // not needed by the code; kept for reference
+
+    [Header("Lock")]
+    [Tooltip("The portal stays sealed until this puzzle is complete. Empty = always open")]
+    public Planet1Puzzle requiredPuzzle;
+    [Tooltip("Also require every enemy on the level to be dead")]
+    public bool requireAllEnemiesDead = false;
 
     [Header("Settings")]
     public float activationDistance = 3.5f;
+    public KeyCode useKey = KeyCode.E;
 
-    private void Update()
+    bool IsUnlocked =>
+        (requiredPuzzle == null || requiredPuzzle.IsComplete) &&
+        (!requireAllEnemiesDead || PlanetEnemy.All.Count == 0);
+
+    void Update()
     {
+        if (player == null)
+        {
+            var pc = FindAnyObjectByType<PlayerController>();
+            if (pc != null) player = pc.transform;
+        }
         if (player == null || destinationSpawnPoint == null) return;
 
-        // Check distance between player and portal
-        float distance = Vector3.Distance(player.position, transform.position);
+        if (Vector3.Distance(player.position, transform.position) > activationDistance) return;
 
-        if (distance <= activationDistance && Input.GetKeyDown(KeyCode.E))
+        if (!IsUnlocked)
         {
-            TeleportPlayer();
+            GameHUD.Prompt("The portal is sealed. Defeat the enemies and touch the crystals.");
+            return;
         }
+
+        GameHUD.Prompt("Press [" + GameHUD.KeyLabel(useKey) + "] to travel to the next planet");
+        if (Input.GetKeyDown(useKey)) TeleportPlayer();
     }
 
-    private void TeleportPlayer()
+    void TeleportPlayer()
     {
+        // Face the same way as before, but standing on the new planet
+        Vector3 up = destinationSpawnPoint.up;
+        Vector3 forward = Vector3.ProjectOnPlane(player.forward, up);
+        if (forward.sqrMagnitude < 0.001f) forward = Vector3.ProjectOnPlane(destinationSpawnPoint.forward, up);
+        Quaternion rot = Quaternion.LookRotation(forward, up);
+
         Rigidbody rb = player.GetComponent<Rigidbody>();
         if (rb != null)
         {
-            // Temporarily disable physics velocity during teleport to avoid fling bugs
+            // Kill the old speed so the player is not flung on arrival
             rb.linearVelocity = Vector3.zero;
             rb.angularVelocity = Vector3.zero;
+            rb.position = destinationSpawnPoint.position;
+            rb.rotation = rot;
         }
+        player.SetPositionAndRotation(destinationSpawnPoint.position, rot);
 
-        // Move player to the destination spawn point on the other planet
-        player.position = destinationSpawnPoint.position;
+        GravityMode mode = player.GetComponent<GravityMode>();
+        if (mode != null) mode.ResetMode();
 
-        // Align player's rotation to the new planet's surface normal
-        Vector3 up = destinationSpawnPoint.up;
-        player.rotation = Quaternion.LookRotation(Vector3.ProjectOnPlane(player.forward, up), up);
-
-        Debug.Log("Teleported successfully between planets!");
+        GameHUD.Say("Travelled to the next planet", GameHUD.Kind.Success);
     }
 }

@@ -3,7 +3,7 @@ using UnityEngine;
 
 public class PlayerAttack : MonoBehaviour
 {
-    public float attackRange = 4f;
+    public float attackRange = 5f;
     public int damage = 1;
     public KeyCode attackKey = KeyCode.F;
 
@@ -17,18 +17,34 @@ public class PlayerAttack : MonoBehaviour
 
     void Attack()
     {
-        Vector3 origin = transform.position + transform.up;
-        Vector3 direction = transform.forward;
+        PlanetEnemy[] enemies =
+            FindObjectsByType<PlanetEnemy>(FindObjectsSortMode.None);
 
-        if (Physics.Raycast(origin, direction, out RaycastHit hit, attackRange))
+        PlanetEnemy closestEnemy = null;
+        float closestDistance = attackRange;
+
+        foreach (PlanetEnemy enemy in enemies)
         {
-            PlanetEnemy enemy = hit.collider.GetComponentInParent<PlanetEnemy>();
+            float distance = Vector3.Distance(
+                transform.position,
+                enemy.transform.position
+            );
 
-            if (enemy != null)
+            if (distance <= closestDistance)
             {
-                enemy.TakeDamage(damage);
-                Debug.Log("You attacked the enemy!");
+                closestDistance = distance;
+                closestEnemy = enemy;
             }
+        }
+
+        if (closestEnemy != null)
+        {
+            closestEnemy.TakeDamage(damage);
+            GameHUD.Say("You hit the enemy!", GameHUD.Kind.Combat);
+        }
+        else
+        {
+            GameHUD.Say("No enemy close enough to attack", GameHUD.Kind.Info);
         }
     }
 }

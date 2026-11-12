@@ -10,6 +10,11 @@ public class PortalSpawner : MonoBehaviour
     [Tooltip("Raise (+) or lower (-) the portal if its pivot is not at its base")]
     public float heightOffset = 0f;
 
+    [Header("Where the portal leads")]
+    public Transform destinationSpawnPoint;
+    public GravitySource destinationGravity;
+    public bool requireAllEnemiesDead = false;
+
     IEnumerator Start()
     {
         if (portalPrefab == null || planetNoise == null || planetGenerator == null) yield break;
@@ -43,6 +48,18 @@ public class PortalSpawner : MonoBehaviour
         Vector3 pos = hit.point + hit.normal * heightOffset;
 
         GameObject portal = Instantiate(portalPrefab, pos, rot, planet);
-        Debug.Log("Portal spawned on the surface.", portal);
+
+        var travel = portal.GetComponentInChildren<InterplanetaryPortal>();
+        if (travel != null)
+        {
+            travel.destinationSpawnPoint = destinationSpawnPoint;
+            travel.destinationGravity = destinationGravity;
+            travel.requiredPuzzle = FindAnyObjectByType<Planet1Puzzle>();   // sealed until Planet 1 is solved
+            travel.requireAllEnemiesDead = requireAllEnemiesDead;
+        }
+        else
+        {
+            Debug.LogWarning("PortalSpawner: the portal prefab has no InterplanetaryPortal component.", portal);
+        }
     }
 }

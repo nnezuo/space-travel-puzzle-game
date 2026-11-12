@@ -7,6 +7,9 @@ public class GravitySource : MonoBehaviour
 
     [Header("Rule")]
     public Rule rule = Rule.Normal;
+
+    [Tooltip("ON = the player's keys (1/2/3) choose the gravity here. OFF = this source's own rule is used")]
+    public bool playerCanChangeGravity = true;
     public float strength = 20f;
     [Range(0.05f, 1f)] public float lowGravityMultiplier = 0.25f;
 
@@ -23,13 +26,16 @@ public class GravitySource : MonoBehaviour
     public bool InRange(Vector3 p) =>
         influenceRadius <= 0f || (p - transform.position).sqrMagnitude <= influenceRadius * influenceRadius;
 
-    // Returns the gravity ACCELERATION vector at a world position
-    public Vector3 GetGravity(Vector3 p)
+    // Gravity acceleration at a world position, using this source's own rule
+    public Vector3 GetGravity(Vector3 p) => GetGravity(p, rule);
+
+    // Same, but with a rule chosen by the caller (GravityMode uses this)
+    public Vector3 GetGravity(Vector3 p, Rule ruleToUse)
     {
         Vector3 toCenter = (transform.position - p).normalized;
         float s = strength;
-        if (rule == Rule.Low) s *= lowGravityMultiplier;
-        if (rule == Rule.Reversed) s = -s;
+        if (ruleToUse == Rule.Low) s *= lowGravityMultiplier;
+        if (ruleToUse == Rule.Reversed) s = -s;
         return toCenter * s;
     }
 

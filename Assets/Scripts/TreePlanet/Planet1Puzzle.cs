@@ -10,8 +10,8 @@ public class Planet1Puzzle : MonoBehaviour
     public UnityEvent<int, int> onProgress;   // (collected, total)
     public UnityEvent onCompleted;
 
-    [Header("Temporary on-screen text (turn off when Julia's UI is ready)")]
-    public bool showDebugText = true;
+    [Header("Old on-screen text (GameHUD replaces it: leave OFF)")]
+    public bool showDebugText = false;
 
     public int Total { get; private set; }
     public int Collected { get; private set; }
@@ -40,9 +40,16 @@ public class Planet1Puzzle : MonoBehaviour
         if (Collected >= Total && Total > 0 && !IsComplete)
         {
             IsComplete = true;
-            message = "Puzzle complete! Go to the beacon.";
+            message = "Puzzle complete! Go to the portal.";
             if (beacon != null) beacon.SetActive(true);
+
+            GameHUD.Say("Crystal collected! " + Collected + " / " + Total, GameHUD.Kind.Success);
+            GameHUD.Banner("PORTAL OPEN", "Go to the portal and press E to travel to the next planet.", 6f);
             onCompleted?.Invoke();
+        }
+        else
+        {
+            GameHUD.Say("Crystal collected! " + Collected + " / " + Total, GameHUD.Kind.Success);
         }
     }
 

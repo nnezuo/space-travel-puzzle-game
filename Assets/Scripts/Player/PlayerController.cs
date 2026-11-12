@@ -22,6 +22,7 @@ public class PlayerController : MonoBehaviour
     public bool IsGrounded { get; private set; }
 
     Rigidbody rb;
+    GravityMode gravityMode;
     Vector2 input;
     bool jumpQueued;
 
@@ -32,6 +33,7 @@ public class PlayerController : MonoBehaviour
         rb.useGravity = false;                       // we apply our own gravity
         rb.constraints = RigidbodyConstraints.FreezeRotation;
         rb.interpolation = RigidbodyInterpolation.Interpolate;
+        gravityMode = GetComponent<GravityMode>();
     }
 
     void Update()
@@ -44,8 +46,22 @@ public class PlayerController : MonoBehaviour
     {
         // 1. Gravity from the best source
         CurrentSource = GravitySource.GetBest(rb.position);
-        Vector3 gravity = CurrentSource ? CurrentSource.GetGravity(rb.position) : Vector3.zero;
-        Vector3 up = gravity.sqrMagnitude > 0.0001f ? -gravity.normalized : transform.up;
+
+        Vector3 gravity = Vector3.zero;
+        Vector3 up = transform.up;
+        if (CurrentSource != null)
+        {
+            // If the player has a GravityMode, his keys choose Low / Normal / Reversed
+            gravity = gravityMode != null
+                ? gravityMode.GetGravity(CurrentSource, rb.position)
+                : CurrentSource.GetGravity(rb.position);
+
+            // "Up" = away from the planet's centre. It no longer flips when gravity is reversed,
+            // so the player (and the camera) stay upright while floating up
+            Vector3 away = rb.position - CurrentSource.transform.position;
+            if (away.sqrMagnitude > 0.0001f) up = away.normalized;
+        }
+
 
         // 2. Ground check (raycast along -up, ignoring triggers)
         IsGrounded = Physics.Raycast(rb.position, -up, halfHeight + groundTolerance,
