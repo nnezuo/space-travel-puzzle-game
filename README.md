@@ -1,102 +1,69 @@
-# Space Travel Puzzle Game
+# Space Travel Game
 
-A compact 3D puzzle game about travelling between small planets, built with **Unity 6** and **C#**. Each planet has its own gravity rule, and the player has to use that rule to solve puzzles and move on to the next world.
+A small 3D game made with **Unity 6** and **C#** for our university course. The player walks around small round planets with their own gravity, fights enemies, solves puzzles and travels with portals.
 
-This is a university project by a team of three students: **Ana Késia**, **Ntombifuthi** and **Júlia**.
+Team: **Ana Kesia**, **Ntombi Kunene** and **Júlia de Mello**.
 
-## Overview
+## Why there are two games (two .exe files)
 
-The player explores 2-3 planets, each with a distinct gravity rule and puzzle (for example, low gravity and long jumps on one planet, and localized gravity wells on another). A connecting objective and a travel transition link the planets into one short game.
+We wanted both planets in one single game, but we couldn't make the two planets run smoothly together (it was too heavy and had problems). So we made **one run file for each planet**.
 
-## Core Technologies
+## How to play (no Unity needed, the easiest way)
 
-| Technology | Purpose |
-|---|---|
-| Unity 6 | Game engine |
-| C# | Gameplay scripting |
-| Git | Version control |
-| Rigidbody physics | Player movement and custom gravity |
+1. **Planet 1:** open the folder `Build Planet 1` and double-click `SpaceTravelGame.exe` (here you can still see the second planet but it's not working properly). 
+2. **Planet 2 (the Dream Garden):** open the folder `Build Planet 2` and double-click `SpaceTravelGamePlanet.exe`
 
-## Key Features and Mechanics Implemented
+Please don't move the .exe out of its folder, it needs the other files next to it.
+If Windows shows a blue warning window, click **More info → Run anyway**.
 
-- **Spherical (radial) gravity.** The player is pulled toward the center of whichever planet they are on, so they can walk all the way around it.
-- **Flexible gravity rules.** Each planet or zone can use normal, low or reversed gravity, and can have a limited range with a priority, which allows localized gravity wells.
-- **Surface orientation.** The player's feet stay aligned with the planet's surface as they move around the curve.
-- **Camera-relative movement and jumping.** The jump uses a fixed speed, so lower gravity automatically gives higher, floatier jumps.
-- **Custom planet mesh with collision.** The placeholder sphere was replaced by the pixel-art planet model `pixel-planet-kelper-452-b`, with a corrected Mesh Collider.
-- **Space-themed camera.** A smooth third-person camera follows the player and keeps its "up" direction aligned with the planet's surface. The background is set up for a space look.
+## How to run it inside Unity 6
 
-## Project Structure (core scripts)
+1. Open the project with **Unity Hub** using the editor version **6000.6.3f1**. The first opening can take a few minutes.
+2. **Planet 1:** open the scene `Assets/Scenes/planets_merged.unity` and press **Play**.
+3. **Planet 2:** in the top menu click **Tools → Space Travel → Planet 2 → Open Standalone Dream Garden** (it opens the scene `Assets/Scenes/DreamGarden.unity`), then press **Play**.
 
-| Script | Attach to | Description |
-|---|---|---|
-| `GravitySource.cs` | Every planet or gravity zone | Defines the gravity rule, strength, range and priority. Also finds which source currently affects the player. |
-| `PlayerController.cs` | Player | Rigidbody-based movement, jumping, custom gravity and surface alignment. |
-| `PlanetCamera.cs` | Main Camera | Smooth third-person follow camera with mouse look. |
+Click inside the Game view so the mouse controls the camera.
 
-> `PlanetController.cs` was the first prototype of the movement and has been replaced by `PlayerController.cs` and `GravitySource.cs`.
-
-## Setup and Installation
-
-### Requirements
-
-- **Unity Hub** and **Unity 6** (use the exact editor version shown in `ProjectSettings/ProjectVersion.txt`)
-- **Git**
-- A code editor such as Visual Studio Code or Visual Studio (optional, for editing scripts)
-
-### Steps
-
-1. **Clone the repository**
-```bash
-   git clone <REPOSITORY-URL>
-   cd <PROJECT-FOLDER>
-```
-2. **Open the project in Unity Hub.** Click *Add → Add project from disk*, select the cloned folder and choose the matching Unity 6 version. The first import can take a few minutes.
-3. **Check the input setting.** Go to *Edit → Project Settings → Player → Other Settings → Active Input Handling* and set it to **Both** (or *Input Manager (Old)*). The scripts use the classic `Input` class.
-4. **Open the main scene** from the `Assets/Scenes` folder and press **Play**.
-
-### Controls
+## Controls
 
 | Key | Action |
-|---|---|
+| --- | --- |
 | W A S D | Move |
 | Space | Jump |
 | Mouse | Look around |
+| Enter | Skip the intro message |
+| Esc | Close a dialogue |
+| **Planet 1** | |
+| F | Attack an enemy |
+| 1 / 2 / 3 | Change gravity: Low / Normal / Reversed (float up) |
+| E | Use the portal |
+| **Planet 2** | |
+| E | Interact |
+| Q | Change the world between Bloom and Ruin (near a pedestal) |
+| R | Go back to the last checkpoint |
 
-### Scene Setup Notes
+## Goal of each planet
 
-- **Player:** a Rigidbody, a Capsule Collider and `PlayerController`. Assign the Main Camera to *Camera Transform*, and put the player on its own layer that is excluded from *Ground Mask*.
-- **Planet:** a collider (Mesh Collider for custom meshes) and `GravitySource`. The planet's pivot should be at its center, and the player should not be parented to the planet.
-- **Camera:** `PlanetCamera` with the player assigned as *Target*.
+- **Planet 1:** find and defeat the enemies and touch the crystals they are guarding. Then the portal opens.
+- **Planet 2 (Dream Garden):** switch the garden between Bloom and Ruin to open new paths, solve the puzzles and find the 3 memories to unlock the castle portal.
 
-## Current Status
+## Please read the documentation
 
-- ✅ Custom pixel-art planet imported and its Mesh Collider fixed
-- ✅ Space-style camera background
-- ✅ Git repository configured with a standard Unity `.gitignore`
-- ✅ Radial gravity, surface orientation and jump scripts written
-- 🔄 Testing spherical movement and jumping on the custom planet
+For all the details, please read **`DOCUMENTATION - Project & Code Guide.docx`** (in the main folder of the project). It explains the whole project, how the planets are made, what every script does and who made each part.
 
-## Next Steps
+Screenshots and a video of the game are in the folder `Videos and Pictures`.
 
-1. Replace the placeholder cylinder with the **animated 3D alien character** and connect its animations (idle, walk, jump) to the player's movement.
-2. Test and tune the movement around the whole planet.
-3. Hand the gravity system over to the team so Planet 1 and Planet 2 can set their own gravity rules.
-4. Add the travel system, objectives and UI between planets.
+## Team roles
 
-## Team
+| Member | What they did |
+| --- | --- |
+| **Ana Kesia** | Player movement, the planet gravity, the camera, the big upgrades of the planet generation (planet shape, colours, trees, rivers), day/night and sky, the game HUD, and putting everything together in the project. |
+| **Ntombi Kunene** | Planet 1: the puzzles with the crystals, the enemies and the fight, the portals. She also made the first version of the planet generation (`CubeSphereGenerator` and `PlanetNoise`). |
+| **Júlia de Mello** | Everything about Planet 2, the Dream Garden: the scene, the puzzles, the dialogues, the camera and her editor tools. |
 
-| Member | Responsibility |
-|---|---|
-| Ana Késia | Core systems: player, gravity, physics, camera and integration |
-| Ntombifuthi | Procedural generation and Planet 1 |
-| Júlia | Planet 2, travel system, UI and game flow |
+## Known problem
 
-## Git Tips for the Team
-
-- Pull before you start working: `git pull`
-- Commit small, clear changes: `git commit -m "Short description"`
-- Avoid editing the same scene at the same time as someone else, since Unity scene files are hard to merge.
+The character animations don't work (we didn't have time to fix it), so the character slides when it moves.
 
 ## AI Assistance Disclosure
 
