@@ -35,7 +35,6 @@ public class PlanetBiomeColor : MonoBehaviour
     }
 #endif
 
-    // Smooth 0..1 transition around an edge
     float Edge(float edge, float value)
     {
         return Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(edge - blend, edge + blend, value));
@@ -59,7 +58,7 @@ public class PlanetBiomeColor : MonoBehaviour
         // Rivers
         c = Color.Lerp(c, water, Mathf.Clamp01((river - 0.4f) * 3f));
 
-        // Use the Path Color from the Inspector
+        // Using the Path Color from the Inspector
         c = Color.Lerp(c, pathColor, Mathf.Clamp01(path * 2f));
         // ------------------------------------------
 

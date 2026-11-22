@@ -17,6 +17,7 @@ public class DiamondMesh : MonoBehaviour
 
         Vector3[] ring = new Vector3[sides];
 
+        //AI use
         for (int i = 0; i < sides; i++)
         {
             float angle = i * Mathf.PI * 2f / sides;
@@ -27,8 +28,6 @@ public class DiamondMesh : MonoBehaviour
             );
         }
 
-        // Separate vertices for each triangular face
-        // to give the diamond sharp, flat facets.
         Vector3[] vertices = new Vector3[sides * 6];
         int[] triangles = new int[sides * 6];
 
