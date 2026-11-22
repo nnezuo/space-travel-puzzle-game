@@ -97,3 +97,13 @@ The player explores 2-3 planets, each with a distinct gravity rule and puzzle (f
 - Pull before you start working: `git pull`
 - Commit small, clear changes: `git commit -m "Short description"`
 - Avoid editing the same scene at the same time as someone else, since Unity scene files are hard to merge.
+
+## AI Assistance Disclosure
+
+During the development of this project, our team used AI as a supplementary learning and development tool.
+
+AI assistance was mainly used to help us understand and navigate the Unity development environment, particularly the creation and manipulation of 3D objects, the Hierarchy, the Inspector, and the configuration of GameObjects and components.
+
+We also used AI occasionally to help explain C# concepts, understand error messages, troubleshoot issues, and provide guidance on certain parts of the code.
+
+AI was used as a support resource throughout the learning and development process, while our team remained responsible for implementing, testing, integrating, and making decisions about the game's features.
