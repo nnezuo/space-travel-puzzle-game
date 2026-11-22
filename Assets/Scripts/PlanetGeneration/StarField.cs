@@ -2,6 +2,29 @@ using UnityEngine;
 
 // A sphere of static stars around the camera, visible only at night.
 // Stars are far away, so they follow the camera position (but not its rotation).
+/*
+ * StarField
+ * ---------
+ * We use a Particle System, but not in the normal way: we don't let it
+ * spawn particles by itself. In Start we create every star ourself with
+ * Emit(), at a random point on a big sphere, and they live "forever".
+ * This is faster than making 600 small GameObjects.
+ *
+ * Every frame:
+ *  - the star sphere moves with the camera (so we can never get closer
+ *    to the stars, they look infinitely far)
+ *  - the alpha of the material follows DayNightController.Daylight, so the
+ *    stars appear when the sun goes down and disappear in the day.
+ *
+ * We use System.Random with a seed, so the stars are always at the same
+ * place every time we play.
+ *
+ * Things to know:
+ *  - The star material must be transparent (URP Particles/Unlit), or the
+ *    alpha change does nothing.
+ *  - startLifetime = 1000000 seconds is about 11 days, so "forever" for a
+ *    game session, but not really forever.
+ */
 [RequireComponent(typeof(ParticleSystem))]
 public class StarField : MonoBehaviour
 {
@@ -23,6 +46,8 @@ public class StarField : MonoBehaviour
     {
         if (cam == null) cam = Camera.main;
 
+        // Setup of the particle system by code, so we don't have to do it
+        // by hand in the Inspector
         var ps = GetComponent<ParticleSystem>();
         var main = ps.main;
         main.loop = false;
@@ -47,6 +72,9 @@ public class StarField : MonoBehaviour
         for (int i = 0; i < starCount; i++)
         {
             // Random point on a sphere (same trick as the planet scatter)
+            // We take a random point in a cube and keep it only if it is
+            // inside the ball (otherwise the corners of the cube would have
+            // more stars). Then normalize puts it on the sphere surface.
             Vector3 dir;
             do
             {
@@ -71,6 +99,7 @@ public class StarField : MonoBehaviour
         transform.position = cam.transform.position;           // follows the camera, never rotates
 
         // Visible when the sun is low or below the horizon (matches the sky color blend)
+        // Daylight <= -0.25 -> alpha 1 (full stars), Daylight >= 0.1 -> alpha 0
         float alpha = 1f - Mathf.InverseLerp(-0.25f, 0.1f, controller.Daylight);
         Color c = mat.color; c.a = alpha; mat.color = c;
     }

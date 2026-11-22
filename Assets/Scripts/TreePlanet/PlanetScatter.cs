@@ -2,8 +2,46 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
+/*
+ * PlanetScatter
+ * -------------
+ * Puts trees, rocks, grass... on the planet automatically.
+ * Put it on the planet, next to CubeSphereGenerator and PlanetNoise.
+ *
+ * Each "Layer" is one type of object (for example "Trees") with its own
+ * rules: at what height it can grow, max slope, far from rivers, far from
+ * the paths, minimum space between two objects...
+ *
+ * How it works (for each layer):
+ *   1. take a random direction on the sphere
+ *   2. ask PlanetNoise the height, the river, the path distance there
+ *   3. if one rule is not OK, we "reject" this spot and try another one
+ *   4. if everything is OK, we spawn a random prefab of the layer there,
+ *      with a random rotation and size
+ * We try at most count * 30 times, so if the rules are too strict we get
+ * less objects than "count". The Debug.Log at the end says why the spots
+ * were rejected, this is very useful to tune the values.
+ *
+ * IMPORTANT: this is NOT done when the game starts. We do it in the editor
+ * with the ⋮ menu -> "Scatter All", and the objects are saved in the scene.
+ * So if we change the seed or the terrain, we must click "Scatter All"
+ * again, or the trees will float or be inside the ground.
+ *
+ * Every random thing uses System.Random(seed), so the same seed always
+ * gives the same forest.
+ *
+ * Things to improve:
+ *  - The spacing check looks at ALL the objects already placed, for every
+ *    new one. With a lot of objects (grass) it gets very slow. That's why
+ *    minSeparation = 0 skips it. A grid would be faster.
+ *  - SurfaceNormal calls GetHeight 3 more times for each spot (slow).
+ *  - Small bug in the Debug.Log: "path:" is printed at the end, glued to
+ *    the average height, without a comma or a space.
+ */
 public class PlanetScatter : MonoBehaviour
 {
+    // One type of object to scatter, with its rules. [Serializable] makes it
+    // show in the Inspector as a list we can open.
     [Serializable]
     public class Layer
     {
@@ -31,9 +69,14 @@ public class PlanetScatter : MonoBehaviour
 
     public Layer[] layers;
 
+    // Every container we create starts with this name, so ClearAll knows
+    // which children it can delete (and doesn't delete other children).
     const string Prefix = "Scatter_";
 
     // Inspector ⋮ menu → "Scatter All"
+    // We need the planet to be generated first, because we use minHeight and
+    // maxHeight from CubeSphereGenerator to have the same 0..1 height scale
+    // as the biome colors (so the trees are on the green parts).
     [ContextMenu("Scatter All")]
     public void ScatterAll()
     {
@@ -118,6 +161,9 @@ public class PlanetScatter : MonoBehaviour
             GameObject prefab = layer.prefabs[rng.Next(layer.prefabs.Length)];
             GameObject obj = Spawn(prefab, container);
 
+            // Rotation: first turn the object so its up = "up", then a random
+            // turn around its own up so all the trees don't look the same way.
+            // We use localPosition because pos is relative to the planet centre.
             Vector3 up = layer.alignToSurface ? normal : dir;
             obj.transform.localPosition = pos - up * layer.sink;
             obj.transform.localRotation =
@@ -127,6 +173,9 @@ public class PlanetScatter : MonoBehaviour
                 Mathf.Lerp(layer.scaleRange.x, layer.scaleRange.y, (float)rng.NextDouble());
         }
 
+        // Report in the Console. If almost everything is rejected by "height",
+        // compare the min/max height of the layer with the average height.
+        // (the "path" count is at the end without a separator, see the top)
         float avg = samples > 0 ? heightSum / samples : 0f;
         Debug.Log($"PlanetScatter: {layer.name} placed {placed.Count}/{layer.count}. " +
                   $"Rejected -> height: {rejHeight}, river: {rejRiver}, slope: {rejSlope}, spacing: {rejSpacing}. " +
@@ -135,6 +184,10 @@ public class PlanetScatter : MonoBehaviour
     }
 
     // Uniform random direction on a sphere (deterministic)
+    // Random point in a cube, keep it only if it is inside the ball, then
+    // normalize. If we didn't throw away the points outside the ball, there
+    // would be more objects in the direction of the cube corners.
+    // (We don't use Random.onUnitSphere because it doesn't use our seed.)
     static Vector3 RandomDirection(System.Random rng)
     {
         while (true)
@@ -148,6 +201,10 @@ public class PlanetScatter : MonoBehaviour
     }
 
     // Ground normal from three nearby terrain samples
+    // The mesh doesn't exist yet as a list we can read easily, so we compute
+    // the normal ourself: we take 3 ground points very close to each other
+    // (p0, p1, p2), make a small triangle, and the cross product of its 2
+    // sides is the normal. If it points inside the planet we flip it.
     static Vector3 SurfaceNormal(Vector3 dir, float radius, PlanetNoise noise)
     {
         Vector3 helper = Mathf.Abs(dir.y) < 0.9f ? Vector3.up : Vector3.right;
@@ -174,6 +231,8 @@ public class PlanetScatter : MonoBehaviour
         return Instantiate(prefab, parent);
     }
 
+    // Tells Unity the scene changed (the * in the title), otherwise it doesn't
+    // ask to save and we lose the scattered objects when we close the editor.
     void MarkDirty()
     {
 #if UNITY_EDITOR

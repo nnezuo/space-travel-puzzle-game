@@ -2,6 +2,22 @@ using UnityEngine;
 
 // Soft glow around the sun. Put on a Quad that is a child of the Sun sphere.
 // It draws its own round gradient texture, so no image file is needed.
+/*
+ * SunHalo
+ * -------
+ * A simple trick to make the sun look like it glows: a flat square (Quad)
+ * behind the sun with a round texture that is white in the middle and
+ * transparent on the border. The quad always turns to face the camera
+ * (this is called a "billboard"), so we never see that it is flat.
+ *
+ * The material of the quad must be a TRANSPARENT URP material (Unlit is
+ * better), otherwise we will see a white square.
+ *
+ * Small limits:
+ *  - The texture is made one time in Start. If we change "falloff" or
+ *    "textureSize" during Play, nothing changes.
+ *  - "color" is also only applied in Start.
+ */
 [RequireComponent(typeof(MeshRenderer))]
 public class SunHalo : MonoBehaviour
 {
@@ -15,6 +31,7 @@ public class SunHalo : MonoBehaviour
     {
         if (cam == null) cam = Camera.main;
 
+        // The halo should not make shadows on the planet
         var r = GetComponent<MeshRenderer>();
         r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         r.receiveShadows = false;
@@ -29,6 +46,9 @@ public class SunHalo : MonoBehaviour
     }
 
     // White circle whose alpha fades from 1 at the centre to 0 at the edge
+    // For each pixel: we turn x, y into -1..1, compute the distance d to the
+    // centre, and alpha = (1 - d) ^ falloff. The power makes the glow
+    // stronger in the middle and softer on the border.
     Texture2D BuildTexture()
     {
         var tex = new Texture2D(textureSize, textureSize, TextureFormat.RGBA32, false);

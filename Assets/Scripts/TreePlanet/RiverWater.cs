@@ -3,6 +3,34 @@ using UnityEngine;
 
 // Builds a thin water mesh that only exists inside the river channels.
 // Put it on the planet, next to CubeSphereGenerator and PlanetNoise.
+/*
+ * How it works:
+ *  - We make a second cube sphere (like CubeSphereGenerator) but this one
+ *    is the WATER surface.
+ *  - For each point, the water height = the ground height as if there was
+ *    no river (ground + carve), a bit lower (threshold). So the water is
+ *    flat-ish inside the river bed.
+ *  - A point is "wet" if the river is deeper than the water level there.
+ *    We only keep the triangles that touch a wet point, so the water mesh
+ *    only exists inside the rivers and the rest is not drawn.
+ *  - The water has no collider, so the player walks in the river (on the
+ *    river bed) and doesn't walk on the water.
+ *  - In Update we move the texture offset to make the water look like it
+ *    is flowing. The ripple texture is made by code with sine waves.
+ *
+ * Things to improve:
+ *  - GetCubePoint is copy-pasted from CubeSphereGenerator. It should be in
+ *    one place, so if we change one we don't forget the other.
+ *  - The arrays keep ALL the vertices of the grid, even the dry ones that
+ *    are not used by any triangle. It works but it wastes memory.
+ *  - The water material and the ripple texture are created with "new" every
+ *    time we generate, and the old ones are never destroyed (memory leak if
+ *    we click "Generate Rivers" a lot in the editor).
+ *  - "offset" grows forever. After a very long time float precision could
+ *    make the texture move in steps. We could use Mathf.Repeat(offset, 1).
+ *  - The water flows in the same direction everywhere (it doesn't follow
+ *    the river), and on each cube face the UVs are in a different direction.
+ */
 public class RiverWater : MonoBehaviour
 {
     public Material waterMaterial;     // URP Lit, Surface Type = Transparent
@@ -53,6 +81,9 @@ public class RiverWater : MonoBehaviour
         var wet = new bool[perFace * 6];
         var triangles = new List<int>();
 
+        // threshold = how much lower than the "normal ground" the water is.
+        // Example: riverDepth 0.8 and fillLevel 0.35 -> water 0.28 under the
+        // banks. Only river parts deeper than 0.28 get water.
         float threshold = noise.riverDepth * fillLevel;
         int v = 0;
 
@@ -126,6 +157,8 @@ public class RiverWater : MonoBehaviour
         var mr = go.AddComponent<MeshRenderer>();
         mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
 
+        // A copy of the material, so the flow animation doesn't change the
+        // original material asset in the project.
         mat = new Material(waterMaterial);
         mat.SetTexture("_BaseMap", BuildRippleTexture(128));   // URP texture slot
         mr.sharedMaterial = mat;
@@ -139,6 +172,9 @@ public class RiverWater : MonoBehaviour
     }
 
     // Tileable ripple pattern drawn with sine waves (whole-number frequencies tile perfectly)
+    // We add 3 sine waves in different directions to get a "water" pattern.
+    // Because the numbers (3, 2, 5...) are whole numbers, the left side of
+    // the texture matches the right side, so we don't see where it repeats.
     static Texture2D BuildRippleTexture(int size)
     {
         var tex = new Texture2D(size, size, TextureFormat.RGBA32, true);

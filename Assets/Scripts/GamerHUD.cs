@@ -4,6 +4,29 @@ using UnityEngine;
 
 // All the on-screen UI in one place: mission intro, objective list, message toasts,
 // gravity keys, attack key, prompts and banners. Put it on an empty object in the scene.
+/*
+ * How it works (simple version):
+ *  - We don't use a Canvas. Everything is drawn by code with OnGUI (the old
+ *    Unity "immediate mode" UI). It was faster for us than making prefabs,
+ *    and everything scales with the screen height.
+ *  - There is only one GameHUD in the scene, saved in a static "instance".
+ *    So any other script can just write GameHUD.Say("hello") without needing
+ *    a reference to the HUD object.
+ *  - The rounded boxes are a small white texture we make by code, and we
+ *    stretch it (9-slice) and color it with GUI.color.
+ *
+ * KNOWN PROBLEM: the file is called "GamerHUD.cs" but the class is "GameHUD".
+ * Unity wants the file name and the MonoBehaviour class name to be the SAME,
+ * otherwise you can't add the script from the Inspector ("script class
+ * cannot be found"). The file should be renamed GameHUD.cs (in Unity, so the
+ * .meta file follows). We noticed it too late.
+ *
+ * Other things to improve if we had more time:
+ *  - OnGUI is slow compared to a real Canvas UI (it runs many times per
+ *    frame). For a small game it's ok.
+ *  - All the sizes are numbers written by hand (22 * u, 380 * u ...), so
+ *    it's a bit hard to change the layout.
+ */
 public class GameHUD : MonoBehaviour
 {
     public enum Kind { Info, Combat, Success, Warning }
@@ -13,6 +36,9 @@ public class GameHUD : MonoBehaviour
     // ------------------------------------------------------------------
     static GameHUD instance;
 
+    // This resets the static variable when we press Play in the editor.
+    // Without it, if "Enter Play Mode Options" (no domain reload) is on,
+    // the old instance from the last Play could still be there.
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     static void ResetStatics() => instance = null;
 
@@ -93,6 +119,9 @@ public class GameHUD : MonoBehaviour
     GUIStyle labelStyle;
     readonly Dictionary<int, GUIStyle> boxStyles = new Dictionary<int, GUIStyle>();
 
+    // We save this HUD as the static instance and start the intro timer.
+    // Note: if there are 2 GameHUD in the scene, the last one wins and the
+    // other one is still drawing, we don't check for that.
     void Awake()
     {
         instance = this;
@@ -111,6 +140,10 @@ public class GameHUD : MonoBehaviour
         if (puzzle == null) puzzle = FindAnyObjectByType<Planet1Puzzle>();
     }
 
+    // Every second we look again for the player / puzzle etc. because when we
+    // travel with a portal, a new scene can load and the old references are
+    // lost. FindAnyObjectByType is a bit slow, that's why we don't do it every
+    // frame. (A cleaner way would be for those scripts to register themselves.)
     void Update()
     {
         if (Time.time >= nextFind) { nextFind = Time.time + 1f; FindRefs(); }
@@ -142,6 +175,11 @@ public class GameHUD : MonoBehaviour
     // ------------------------------------------------------------------
     // Drawing
     // ------------------------------------------------------------------
+    // OnGUI is called several times per frame (one time for each event: layout,
+    // mouse, repaint...). We only draw on Repaint, it's enough because our HUD
+    // has no buttons to click.
+    // "u" is our unit: 1 u = 1/1000 of the screen height, so the HUD has the
+    // same look on a small or a big screen.
     void OnGUI()
     {
         if (Event.current.type != EventType.Repaint) return;
@@ -160,6 +198,9 @@ public class GameHUD : MonoBehaviour
     }
 
     // ---------- Objective list (top-left) ----------
+    // Only shown on the planet with the puzzle (Planet1Puzzle). It shows
+    // 3 steps: kill the enemies, touch the crystals, take the portal.
+    // The enemy count comes from static counters in PlanetEnemy.
     void DrawObjective(float u)
     {
         if (!OnPuzzlePlanet()) return;
@@ -195,6 +236,8 @@ public class GameHUD : MonoBehaviour
     }
 
     // ---------- Message toasts (top-center) ----------
+    // Each toast fades in quickly (0.18 s) while sliding down a bit, then
+    // fades out in the last 0.5 s. The newest message is at the top.
     void DrawToasts(float u)
     {
         float y = 24 * u;
@@ -235,6 +278,9 @@ public class GameHUD : MonoBehaviour
     }
 
     // ---------- Gravity keys, attack key, prompt and altitude bar (bottom) ----------
+    // The width of the panel depends on how many "cells" (keys) we show:
+    // 3 for the gravity keys (only if GravityMode is available on this
+    // planet) and 1 for attack (only if there are enemies).
     void DrawBottom(float u)
     {
         bool showGravity = gravityMode != null && gravityMode.Available;
@@ -371,6 +417,8 @@ public class GameHUD : MonoBehaviour
         Cell(cx + cell, y, cell, cap, KeyLabel(k1), "Low", false, u);
         Cell(cx + cell * 2, y, cell, cap, KeyLabel(k2), "Normal", false, u);
         Cell(cx + cell * 3, y, cell, cap, KeyLabel(k3), "Reversed", false, u);
+        // NOTE: "E" is written by hand here, it is not read from the portal script.
+        // If someone changes the portal key, this text will be wrong.
         Cell(cx + cell * 4, y, cell, cap, "E", "Portal", false, u);
         y += 112 * u;
 
@@ -434,6 +482,12 @@ public class GameHUD : MonoBehaviour
     }
 
     // A white rounded square, small enough to be stretched (9-slice) to any size
+    // For each pixel we find the closest point of the inner square (cx, cy)
+    // and measure the distance d. If d is bigger than the radius, the pixel
+    // is outside the round corner so it becomes transparent. The "+ 0.5f"
+    // gives a soft edge (a bit of anti-aliasing).
+    // Note: these textures are never destroyed, but there are only a few
+    // (one per radius) so it's ok.
     static Texture2D MakeRounded(int radius)
     {
         int size = radius * 2 + 2;
@@ -454,6 +508,8 @@ public class GameHUD : MonoBehaviour
     }
 
     // Text with a soft shadow, so it stays readable on any background
+    // We draw the text 2 times: first in black a bit to the bottom right
+    // (the shadow), then the real color on top.
     void Text(Rect r, string s, float size, Color c, TextAnchor anchor = TextAnchor.MiddleLeft,
               bool bold = false, bool wrap = false)
     {
