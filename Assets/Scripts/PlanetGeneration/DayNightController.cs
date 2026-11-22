@@ -2,6 +2,34 @@ using UnityEngine;
 using UnityEngine.Rendering;
 
 // Put this ONCE in the scene, on the Directional Light.
+/*
+ * DayNightController
+ * ------------------
+ * This is the day / night for the PLANETS (the other system, DayNightBrain,
+ * is for a normal flat world with a sky that turns).
+ *
+ * The problem on a round planet: it can be day on one side and night on the
+ * other side at the same time. So we can't just turn the light with a timer.
+ * Instead, every frame:
+ *   1. we find the planet the player is on (with his GravitySource)
+ *   2. we ask that planet where its sun is (PlanetDayNight.SunDirection)
+ *   3. we compare it with the "up" of the player (dot product):
+ *        +1 = the sun is right above the player (noon)
+ *         0 = the sun is on the horizon (sunrise / sunset)
+ *        -1 = the sun is under the planet (midnight)
+ *   4. with this number we choose the light direction, color, intensity,
+ *      ambient light and the sky color.
+ *
+ * There is only ONE real light in the scene. At night we just turn it to
+ * the other side and make it blue and weak, so it looks like moonlight.
+ *
+ * Other scripts read "Daylight" (StarField) and "CurrentPlanet" (CelestialBodies).
+ *
+ * WARNING: this script and the DayNightBrain modules both change
+ * RenderSettings (ambient mode, ambient colors, fog). If both are in the
+ * same scene they will fight each other, so only use one of them per scene.
+ * Also the camera is set to "Solid Color", so a Skybox material is not shown.
+ */
 [RequireComponent(typeof(Light))]
 public class DayNightController : MonoBehaviour
 {
@@ -16,6 +44,8 @@ public class DayNightController : MonoBehaviour
 
     public PlanetDayNight CurrentPlanet { get; private set; }   // read by CelestialBodies
 
+    // Setup: the light becomes the "sun" of the scene, and we take control of
+    // the ambient light and the camera background ourself.
     void Awake()
     {
         sun = GetComponent<Light>();
@@ -31,6 +61,9 @@ public class DayNightController : MonoBehaviour
         if (cam != null) cam.clearFlags = CameraClearFlags.SolidColor;   // the camera paints a flat color as the sky
     }
 
+    // LateUpdate so the player has already moved this frame.
+    // Note: the player is only searched in Awake. If the player is spawned
+    // later (or a new scene is loaded), player stays null and nothing happens.
     void LateUpdate()
     {
         if (player == null) return;
@@ -53,10 +86,14 @@ public class DayNightController : MonoBehaviour
         bool isDay = daylight >= 0f;
 
         // 3. The light shines FROM the sun by day and from a "moon" on the opposite side by night
+        // (a directional light shines along its forward, so we look at -from)
         Vector3 from = isDay ? sunDir : -sunDir;
         transform.rotation = Quaternion.LookRotation(-from);
 
         // 4. Intensity and color (fade to 0 at the horizon, so the switch is invisible)
+        // "amount" is 0 at the horizon and 1 when the sun is a bit higher
+        // (the * 4 makes it reach 1 quickly). "dusk" is 1 at the horizon.
+        // The 4 and 3 were chosen by hand, just to look nice.
         float amount = Mathf.Clamp01(Mathf.Abs(daylight) * 4f);
         float dusk = 1f - Mathf.Clamp01(Mathf.Abs(daylight) * 3f);
 

@@ -11,6 +11,26 @@ Customize the "Ambient Mode - Trilight (Gradient)" according to the time of day:
 */
 namespace FlipGameDev.TerrainAndGrassPack.DayNightSystem
 {
+    /*
+     * EnvironmentLightingModule
+     * -------------------------
+     * This module changes the general light of the scene with the time:
+     *  - the color of the sun (orange at sunrise / sunset, white at midday)
+     *  - the ambient light (the light that comes from "everywhere"), with
+     *    3 colors: sky (top), equator (sides) and ground (bottom)
+     *  - the fog color
+     * All the colors come from Gradients in the Inspector (see the note above
+     * to know which part of the gradient is which time of the day).
+     *
+     * Things to know:
+     *  - This script changes RenderSettings, so it OVERRIDES what is set in
+     *    the Lighting window of Unity. If you change the ambient there, it
+     *    will be replaced when you press Play.
+     *  - We set fog = false, so the fog distances and the fog color are
+     *    useless right now. If we want fog, we must change it to true here
+     *    (changing it in the Lighting window is not enough).
+     *  - If ambientMode is not Trilight, only the sun color changes.
+     */
     public class EnvironmentLightingModule : MonoBehaviour, IDayNightModule
     {
         [Header("Lighting Settings")]
@@ -28,6 +48,7 @@ namespace FlipGameDev.TerrainAndGrassPack.DayNightSystem
 
         private bool _isGradientMode;
 
+        // Setup of the scene lighting, done one time at the start
         public void Initialize(DayNightState state)
         {
             RenderSettings.ambientMode = ambientMode;
@@ -38,6 +59,7 @@ namespace FlipGameDev.TerrainAndGrassPack.DayNightSystem
             _isGradientMode = ambientMode == AmbientMode.Trilight;
         }
 
+        // Every frame we read the gradients at the current time (0 to 1)
         public void Tick(DayNightState state, float deltaTime)
         {
             float timeFraction = state.NormalizedTime;

@@ -1,5 +1,42 @@
 using UnityEngine;
 
+/*
+ * CubeSphereGenerator
+ * -------------------
+ * This script makes the planet mesh by code. The idea is called a
+ * "cube sphere":
+ *   1. we make a cube with 6 faces, each face is a grid of
+ *      resolution x resolution points
+ *   2. we normalize every point (length = 1), so the cube "inflates" and
+ *      becomes a sphere
+ *   3. we push every point out by (radius + height of the terrain), the
+ *      height comes from PlanetNoise (mountains, rivers, paths...)
+ *   4. we color every vertex with PlanetBiomeColor (no texture)
+ *   5. we give the mesh to the MeshFilter and to a MeshCollider, so the
+ *      player can walk on it
+ *
+ * A cube sphere is better than the default Unity sphere (UV sphere) for
+ * this, because the UV sphere has a lot of tiny triangles at the poles,
+ * and the cube sphere is more even.
+ *
+ * The same seed always gives the same planet, so what we see in the Editor
+ * (with the "Generate Planet" menu) is the same as in the game.
+ *
+ * Known problems / things to improve:
+ *  - Each face of the cube has its OWN vertices on its borders, so the
+ *    vertices on the edges are duplicated. RecalculateNormals doesn't know
+ *    they are the same point, so we can sometimes see thin lines (seams)
+ *    in the light along the 12 edges of the cube.
+ *  - Just normalizing the cube points gives more vertices near the corners
+ *    of the cube than in the middle of the faces. There is a better formula
+ *    to spread them evenly, we didn't have time to try it.
+ *  - With resolution 256 the mesh is very big (6 x 256 x 256 = 393 216
+ *    vertices) and the MeshCollider is slow to build. 100-128 is enough.
+ *  - The planet is generated again in Start every time we press Play, even
+ *    if it was already generated in the editor.
+ *  - The mesh name "Planet 1 Cube Sphere" is written in the code, so it is
+ *    the same name for every planet that uses this script.
+ */
 [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
 public class CubeSphereGenerator : MonoBehaviour
 {
@@ -26,6 +63,10 @@ public class CubeSphereGenerator : MonoBehaviour
     }
 
     // Called by PlanetNoise / PlanetBiomeColor when a value changes in the Inspector
+    // We can't build a mesh directly inside OnValidate (Unity doesn't like
+    // it and shows warnings), so we use delayCall: it runs the code a bit
+    // later, when the editor is ready. "this == null" checks if the object
+    // was deleted in the meantime.
     public void EditorRefresh()
     {
 #if UNITY_EDITOR
@@ -64,6 +105,13 @@ public class CubeSphereGenerator : MonoBehaviour
             else DestroyImmediate(meshFilter.sharedMesh);
         }
 
+        /*
+         * We prepare all the arrays. We save the direction, the height and
+         * the river value of each vertex, because we need them again later
+         * for the colors (after the normals are computed).
+         * Number of triangles: each face has (resolution-1)^2 squares,
+         * each square = 2 triangles = 6 indices, and there are 6 faces.
+         */
         int verticesPerFace = resolution * resolution;
         int totalVertices = verticesPerFace * 6;
 
@@ -110,6 +158,12 @@ public class CubeSphereGenerator : MonoBehaviour
                 }
             }
 
+            // Make the triangles of this face. For each small square of the
+            // grid we have 4 corners:
+            //    c --- d
+            //    |     |
+            //    a --- b
+            // and we make 2 triangles with them.
             for (int y = 0; y < resolution - 1; y++)
             {
                 for (int x = 0; x < resolution - 1; x++)
@@ -120,6 +174,11 @@ public class CubeSphereGenerator : MonoBehaviour
                     int d = c + 1;
 
                     // Pick the winding order so triangles face outward
+                    // (Unity only draws the front side of a triangle. The
+                    // front depends on the order of the 3 points. Because
+                    // the 6 faces of the cube are not all oriented the same
+                    // way, we test with a cross product and flip if needed,
+                    // otherwise some faces would be invisible.)
                     Vector3 normal = Vector3.Cross(vertices[b] - vertices[a], vertices[c] - vertices[a]);
                     Vector3 outward = vertices[a].normalized;
 
@@ -140,6 +199,8 @@ public class CubeSphereGenerator : MonoBehaviour
         minHeight = minH;
         maxHeight = maxH;
 
+        // UInt32 is needed because a normal mesh can only have 65 535
+        // vertices (UInt16), and our planet has a lot more.
         Mesh mesh = new Mesh();
         mesh.name = MeshName;
         mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
@@ -153,6 +214,12 @@ public class CubeSphereGenerator : MonoBehaviour
         {
             if (biomeColor == null) { colors[i] = Color.white; continue; }
 
+            // normalizedHeight: 0 = lowest point of the planet, 1 = highest
+            // latitude: 0 at the equator, 1 at the poles (we use the world Y)
+            // slope: 0 if the ground is flat (normal = direction from the
+            //        centre), bigger when the ground is steep
+            // Note: GetPath is called a second time here for every vertex,
+            // we could have saved it in the first loop like the rivers.
             float normalizedHeight = Mathf.InverseLerp(minH, maxH, heights[i]);
             float latitude = Mathf.Abs(directions[i].y);
             float slope = 1f - Mathf.Clamp01(Vector3.Dot(normals[i], directions[i]));
@@ -168,13 +235,16 @@ public class CubeSphereGenerator : MonoBehaviour
         // Collider: refresh it so the player and crystal spawner use the new shape
         MeshCollider col = GetComponent<MeshCollider>();
         if (col == null) col = gameObject.AddComponent<MeshCollider>();
-        col.sharedMesh = null;
+        col.sharedMesh = null;   // set to null first to force Unity to rebuild the collider
         col.sharedMesh = mesh;
 
         if (planetMaterial != null)
             meshRenderer.sharedMaterial = planetMaterial;
     }
 
+    // Gives a point on one face of a cube that goes from -1 to 1.
+    // u and v (0..1) are the position on the face, we change them to -1..1.
+    // Each "case" is one face: +X, -X, +Y, -Y, +Z, -Z.
     Vector3 GetCubePoint(int face, float u, float v)
     {
         float x = u * 2f - 1f;

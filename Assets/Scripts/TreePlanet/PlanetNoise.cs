@@ -2,6 +2,44 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+/*
+ * PlanetNoise
+ * -----------
+ * This is the "terrain recipe" of the planet. For any direction from the
+ * centre of the planet, it tells how high the ground is (GetHeight).
+ * CubeSphereGenerator calls it for every vertex, and PlanetScatter,
+ * PortalSpawner, RiverWater... also use it to know where the ground is.
+ *
+ * The height is made with several layers added together:
+ *   1. gentle hills (fractal noise = "fbm")
+ *   2. mountains, only in some regions (a "mask" says where)
+ *   3. rivers dug into the ground
+ *   4. the hills are made flatter along the paths
+ *   5. a flat platform for the portal
+ *
+ * We wrote our OWN 3D Perlin noise (Noise3) instead of using
+ * Mathf.PerlinNoise, because Mathf.PerlinNoise is only 2D. With 2D noise on
+ * a sphere we would get stretched shapes and seams. With 3D noise we can
+ * just give the (x, y, z) of the direction and it is smooth everywhere.
+ *
+ * The seed shuffles the permutation table of the noise, so a different seed
+ * = a different planet, and the same seed = always the same planet.
+ *
+ * Paths: we make some "spokes" = arcs on the sphere that start at the portal
+ * and go in different directions. A point is "on a path" if it is close to
+ * one of these arcs. The paths are a bit wavy (PathWobble) so they look like
+ * real trails and not perfect lines.
+ *
+ * Things to know / improve:
+ *  - All the heights are in world units and are NOT scaled with the radius
+ *    of the planet. If we change the radius we must change the heights too
+ *    (see the comment just below).
+ *  - It is a bit slow: for one vertex, Warp() and PathDistance() are
+ *    computed again in GetHeight, GetRiver and GetPath. We could compute
+ *    everything one time per vertex and return it together.
+ *  - The units are mixed: portalZoneRadius is a "fraction of 180 degrees"
+ *    but the path settings are in degrees. It's confusing in the Inspector.
+ */
 public class PlanetNoise : MonoBehaviour
 {
     [Header("Portal platform zone")]
@@ -141,12 +179,21 @@ public class PlanetNoise : MonoBehaviour
     }
 #endif
 
+    // Rebuild automatically if anything is missing or an Inspector value changed
+    // (every public function calls this first, so we never use an old table
+    // or old paths, even in Edit mode where Awake is not called)
     void EnsureReady()
     {
         if (perm == null || dirty || builtSeed != seed)
             ApplySeed();
     }
 
+    // ---------------------------------------------------------------
+    // Seed: shuffle 0..255 with a seeded random generator
+    // ---------------------------------------------------------------
+    // This is the classic Perlin noise table. It is the only "random" part
+    // of the noise: the noise uses it to choose a gradient direction at each
+    // corner of the grid. The shuffle is the Fisher-Yates shuffle.
     void BuildTable()
     {
         int[] p = new int[256];
@@ -172,6 +219,15 @@ public class PlanetNoise : MonoBehaviour
         builtSeed = seed;
     }
 
+    // ---------------------------------------------------------------
+    // Paths: build the list of arcs that start at the portal
+    // ---------------------------------------------------------------
+    // We split the circle around the portal in pathCount parts (sectors) and
+    // put one path in each part, with a small random angle. This way the
+    // paths are not all on the same side. Each path ends at a random length
+    // between 75% and 100% of pathLength.
+    // The "end" point uses cos / sin to walk "len" radians on the sphere from
+    // the portal in the direction "tangent".
     //AI use
     void BuildSpokes()
     {
@@ -240,6 +296,14 @@ public class PlanetNoise : MonoBehaviour
         });
     }
 
+    // Angular distance (radians) from point p to the arc a->b of one spoke
+    // This is the hardest math of the file. The arc is part of a big circle
+    // on the sphere, and this circle is in a plane (normal n).
+    //  - First we measure how far p is from that plane ("side").
+    //  - Then we check if p is between the 2 ends of the arc. If yes, the
+    //    distance is just asin(side).
+    //  - If not, p is "after" one of the ends, so we take the distance to
+    //    the closest end point instead.
     static float DistToArc(Vector3 p, Spoke s)
     {
         float side = Vector3.Dot(p, s.n);
@@ -338,6 +402,15 @@ public class PlanetNoise : MonoBehaviour
                ((h & 2) == 0 ? v : -v);
     }
 
+    // TRUE 3D gradient noise, roughly -1..1. No axis-aligned stretching, works for negative inputs
+    // How it works (simple version):
+    //  - space is cut in cubes of size 1. We find the cube that holds the point
+    //    (xi, yi, zi) and where the point is inside it (xf, yf, zf from 0 to 1)
+    //  - each of the 8 corners of the cube gets a "random" gradient from the
+    //    perm table, and we compute its effect on the point (Grad)
+    //  - we mix the 8 values with Lerp, using the Fade curve, first on x,
+    //    then on y, then on z
+    // This is based on Ken Perlin's "improved noise" (2002).
     float Noise3(float x, float y, float z)
     {
         int xi = Mathf.FloorToInt(x);
@@ -404,6 +477,13 @@ public class PlanetNoise : MonoBehaviour
         );
     }
 
+    // Fractal noise: several layers of finer and weaker noise, normalized to about -1..1
+    // (fbm = "fractal Brownian motion"). The first layer makes the big shapes,
+    // the next layers add smaller and smaller details:
+    //   - each layer ("octave") is lacunarity times smaller (more detail)
+    //   - and "gain" (persistence) times weaker
+    // We divide by "norm" so the result stays around -1..1 whatever the
+    // number of octaves.
     float Fbm(Vector3 p, int oct, float gain)
     {
         float sum = 0f;
@@ -421,6 +501,13 @@ public class PlanetNoise : MonoBehaviour
         return sum / norm;
     }
 
+    // Ridged fractal noise with ROUNDED crests (no V-shaped creases), about 0..1.
+    // Fine detail only appears on high ground, so valleys stay smooth to walk on.
+    // The trick for mountains: normal noise is like soft hills, but if we take
+    // 1 - |noise|, the places where the noise crosses 0 become sharp ridges
+    // (like mountain chains). We use a "soft" abs (sqrt(n*n + s*s)) so the top
+    // is a bit round. "weight" makes the next octave only strong where the
+    // last one was high, so the details are on the mountain tops.
     float RidgedFbm(Vector3 p, int oct, float gain)
     {
         float sum = 0f;
@@ -452,6 +539,10 @@ public class PlanetNoise : MonoBehaviour
         return sum / norm;
     }
 
+    // Domain warp: bends rivers into meanders and mountains into natural ranges
+    // Instead of reading the noise at the point d, we first move d a bit with
+    // ANOTHER noise, then we read the noise there. The result looks twisted
+    // and more natural. Same idea as PathWobble above.
     Vector3 Warp(Vector3 d)
     {
         if (warpStrength <= 0f)
@@ -485,6 +576,10 @@ public class PlanetNoise : MonoBehaviour
         return Smooth(edge0, edge0 + 0.20f, f);
     }
 
+    // 1 on the river line, fading smoothly to 0 at the banks (rounded channel)
+    // A river is where the noise is close to 0: the line where the noise goes
+    // from negative to positive makes a long curvy line, like a river.
+    // riverWidth says how close to 0 counts as river.
     float RiverShape(Vector3 w)
     {
         float n = Fbm(
@@ -511,6 +606,16 @@ public class PlanetNoise : MonoBehaviour
         );
     }
 
+    // ---------------------------------------------------------------
+    // Public API
+    // ---------------------------------------------------------------
+
+    // 0..1 river strength (colors, water and scatter rules). No rivers on mountains or paths.
+    // (NOTE: this comment is for GetRiver below, not for GetRiverCarve. It
+    // looks like GetRiverCarve was added in between and the comment stayed here)
+
+    // How much the river digs into the ground here, in world units (0 = no river).
+    // Same formula as step 3 of GetHeight, so the water mesh matches the channel exactly.
     public float GetRiverCarve(Vector3 d)
     {
         EnsureReady();
@@ -558,6 +663,10 @@ public class PlanetNoise : MonoBehaviour
         return m;
     }
 
+    // Ground height (world units) in a direction from the planet centre
+    // This is THE main function. d must be a direction with length 1.
+    // The real position of the ground = centre + d * (radius + GetHeight(d)).
+    // Can be negative (under the radius) in the valleys and rivers.
     public float GetHeight(Vector3 d)
     {
         EnsureReady();
@@ -600,6 +709,9 @@ public class PlanetNoise : MonoBehaviour
 
         h *= Mathf.Lerp(1f, pathFlatten, corridor);
 
+        // 5) Flat platform for the portal
+        // We multiply h by 0 near the portal, so the ground there is exactly
+        // at "radius" (flat), and by 1 far from it (no change).
         if (enablePortalZone)
         {
             float ang = Vector3.Angle(d, portalDir) / 180f;

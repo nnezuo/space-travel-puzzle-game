@@ -2,6 +2,24 @@ using UnityEngine;
 
 // Put this on EACH planet (on the same object as its GravitySource).
 // It only holds that planet's clock and look; DayNightController does the lighting.
+/*
+ * PlanetDayNight
+ * --------------
+ * Each planet has its own time and its own colors. For example one planet
+ * can have a short day and an orange sky, and another one a long day and
+ * no moon. This script only stores these settings and moves the clock,
+ * it doesn't change any light by itself (DayNightController does that).
+ *
+ * timeOfDay goes from 0 to 1 and then starts again at 0 (Mathf.Repeat).
+ *
+ * Small things to know:
+ *  - Every planet's clock is running all the time, even if the player is on
+ *    another planet. It's not a problem, it's just like real planets.
+ *  - The sun direction uses the rotation of the planet, so if the planet
+ *    object turns, the sun turns with it.
+ *  - The comment on timeOfDay says 0.25 = sunrise, but sunrise really depends
+ *    on where the player stands on the planet (see DayNightController).
+ */
 public class PlanetDayNight : MonoBehaviour
 {
     [Header("Clock")]
@@ -31,6 +49,7 @@ public class PlanetDayNight : MonoBehaviour
     public Color daySky = new Color(0.35f, 0.62f, 0.95f);   // blue
     public Color duskSky = new Color(0.95f, 0.50f, 0.30f);   // orange at sunrise / sunset
     public Color nightSky = new Color(0.02f, 0.03f, 0.08f);   // almost black, slightly blue
+    // Move the clock forward. One full day = cycleMinutes * 60 seconds.
     void Update()
     {
         if (cycleMinutes <= 0f) return;   // frozen
@@ -38,6 +57,9 @@ public class PlanetDayNight : MonoBehaviour
     }
 
     // Direction from the planet's centre TOWARD the sun (world space)
+    // We turn timeOfDay into an angle (0..2*PI) and make a point on a circle
+    // with sin / cos. Then we tilt this circle (sunPathTilt) and turn it with
+    // the planet, so the sun doesn't always pass over the same place.
     public Vector3 SunDirection()
     {
         float a = timeOfDay * Mathf.PI * 2f;
