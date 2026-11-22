@@ -16,9 +16,22 @@ public sealed class DreamInteraction : MonoBehaviour
     public void Refresh(bool bloom)
     {
         if (indicator == null) return;
-        bool lit = kind == Kind.Keeper ? DreamProgression.KeeperRemembered :
-            kind == Kind.Petal ? DreamProgression.PetalSteps > index :
-            kind == Kind.Astral && DreamProgression.AstralLit(index);
+        bool lit;
+        switch (kind)
+        {
+            case Kind.Keeper:
+                lit = DreamProgression.KeeperRemembered;
+                break;
+            case Kind.Petal:
+                lit = DreamProgression.PetalSteps > index;
+                break;
+            case Kind.Astral:
+                lit = DreamProgression.AstralLit(index);
+                break;
+            default:
+                lit = false;
+                break;
+        }
         bool available = kind != Kind.Petal || bloom == (index == 1);
         Color color = lit ? new Color(1f, .76f, .3f) :
             available ? new Color(.46f, .65f, .8f) : new Color(.22f, .18f, .3f);

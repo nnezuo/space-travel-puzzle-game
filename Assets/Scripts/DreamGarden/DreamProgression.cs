@@ -12,8 +12,16 @@ public static class DreamProgression
     private static readonly int[] astralOrder = { 2, 0, 3, 1 };
     public static bool GameCompleted => Planet1Solved && Planet2Solved;
     public static void MarkPlanet1Solved() => Planet1Solved = true;
-    public static bool ChallengeComplete(int index) => index == 0 ? KeeperRemembered :
-        index == 1 ? PetalSteps == 3 : index == 2 && AstralSteps == 4;
+    public static bool ChallengeComplete(int index)
+    {
+        switch (index)
+        {
+            case 0: return KeeperRemembered;
+            case 1: return PetalSteps == 3;
+            case 2: return AstralSteps == 4;
+            default: return false;
+        }
+    }
 
     public static string NormalizeAnswer(string answer) =>
         string.Join(" ", (answer ?? "").Trim().ToLowerInvariant().Split(
@@ -38,7 +46,11 @@ public static class DreamProgression
     public static bool PressAstral(int symbol, bool bloom)
     {
         if (Memories != 2 || !bloom || AstralSteps == 4) return false;
-        if (symbol != astralOrder[AstralSteps]) { AstralSteps = 0; return false; }
+        if (symbol != astralOrder[AstralSteps])
+        {
+            AstralSteps = 0;
+            return false;
+        }
         AstralSteps++;
         return true;
     }

@@ -70,7 +70,7 @@ public class DreamSceneFlow : MonoBehaviour
                 yield return null;
             }
             progress = 1;
-            yield return null; // Destination Start generates the garden before revealing it.
+            yield return null; // Let destination Start methods initialize the saved garden before revealing it.
         }
         yield return Fade(1, 0);
         Restore();

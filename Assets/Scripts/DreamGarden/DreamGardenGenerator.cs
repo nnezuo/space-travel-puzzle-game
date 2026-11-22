@@ -77,6 +77,29 @@ public partial class DreamGardenGenerator : MonoBehaviour
     [ContextMenu("Generate Dream Garden")]
     public void GenerateDreamGarden()
     {
+        PrepareGeneration();
+        CreateMaterials();
+        CreatePlanet();
+        List<Vector2Int> solution = GenerateMaze();
+        SolutionRoute = solution.AsReadOnly();
+        BuildMaze(solution);
+        AddOuterForest();
+        AddSakuras();
+        AddRuinsAndHouses();
+        AddFloatingStars();
+        CreateMemories(solution);
+        CreateChallenges(solution);
+        CreateEntryAnchor();
+        Vector3 exit = CreateExit(solution[solution.Count - 1]);
+        CreateAtmosphere();
+        if (puzzle != null) puzzle.Initialize(lanterns, phaseGates, exit);
+        generatedVisualVersion = CurrentVisualVersion;
+        if (Application.isPlaying) FixRuntimeSpawnAfterUpgrade();
+    }
+
+    private void PrepareGeneration()
+    {
+        // Explicit regeneration replaces children; normal scene startup only binds saved objects.
         for (int i = transform.childCount - 1; i >= 0; i--)
         {
             Transform child = transform.GetChild(i);
@@ -102,23 +125,6 @@ public partial class DreamGardenGenerator : MonoBehaviour
         treePositions.Clear();
 
         random = new System.Random(seed);
-        CreateMaterials();
-        CreatePlanet();
-        List<Vector2Int> solution = GenerateMaze();
-        SolutionRoute = solution.AsReadOnly();
-        BuildMaze(solution);
-        AddOuterForest();
-        AddSakuras();
-        AddRuinsAndHouses();
-        AddFloatingStars();
-        CreateMemories(solution);
-        CreateChallenges(solution);
-        CreateEntryAnchor();
-        Vector3 exit = CreateExit(solution[solution.Count - 1]);
-        CreateAtmosphere();
-        if (puzzle != null) puzzle.Initialize(lanterns, phaseGates, exit);
-        generatedVisualVersion = CurrentVisualVersion;
-        if (Application.isPlaying) FixRuntimeSpawnAfterUpgrade();
     }
 
     private void FixRuntimeSpawnAfterUpgrade()
@@ -198,8 +204,6 @@ public partial class DreamGardenGenerator : MonoBehaviour
 
     private void EnsureEnglishSceneText()
     {
-
-
         string[] memoryNames = { "Moon", "Petal", "Star" };
         foreach (DreamLantern lantern in GetComponentsInChildren<DreamLantern>(true))
         {
@@ -599,7 +603,7 @@ public partial class DreamGardenGenerator : MonoBehaviour
                     SpawnPackModel(fantasyGrassPrefab, tuft.transform, new Vector3(1.8f, 0.7f, 1.8f), "fantasy grass");
                 }
 
-                if (!routeCells.Contains(cell) && random.NextDouble() < 0.18)
+                if (random.NextDouble() < 0.18)
                 {
                     GameObject shrub = new GameObject("courtyard shrub");
                     shrub.transform.SetParent(transform, false);
@@ -773,7 +777,6 @@ public partial class DreamGardenGenerator : MonoBehaviour
     private void AddOuterForest()
     {
         float minDistance = mazeCells * cellSize * 0.5f + 6f;
-        float maxDistance = minDistance + 13f;
         for (int i = 0; i < perimeterTreeCount; i++)
         {
             float angle = i * Mathf.PI * 2f / Mathf.Max(1, perimeterTreeCount) + (float)random.NextDouble() * 0.22f;
@@ -912,6 +915,28 @@ public partial class DreamGardenGenerator : MonoBehaviour
         art.transform.localPosition = Vector3.zero;
         art.transform.localRotation = Quaternion.identity;
         art.transform.localScale = Vector3.one;
+        ConfigurePackComponents(art);
+
+        Bounds bounds = GetModelBounds(art, parent);
+        if (bounds.size.y < 0.01f) return;
+        Vector3 scale = new Vector3(
+            desiredSize.x / Mathf.Max(0.05f, bounds.size.x),
+            desiredSize.y / Mathf.Max(0.05f, bounds.size.y),
+            desiredSize.z / Mathf.Max(0.05f, bounds.size.z));
+        // Placement labels also select foliage scaling and material conversion.
+        bool foliage = label.Contains("tree") || label.Contains("grass");
+        if (foliage)
+            scale = Vector3.one * (desiredSize.y / Mathf.Max(0.05f, bounds.size.y));
+        art.transform.localScale = scale;
+        art.transform.localPosition = new Vector3(
+            -bounds.center.x * scale.x,
+            -bounds.min.y * scale.y,
+            -bounds.center.z * scale.z);
+        AdaptMaterialRenderers(art, foliage);
+    }
+
+    private void ConfigurePackComponents(GameObject art)
+    {
         foreach (Collider collider in art.GetComponentsInChildren<Collider>(true))
             collider.enabled = false;
         // pack wind controllers target their original shaders; cloned garden materials are static
@@ -933,21 +958,6 @@ public partial class DreamGardenGenerator : MonoBehaviour
                 levels[levels.Count - 1] = last; group.SetLODs(levels.ToArray());
             }
         }
-
-        Bounds bounds = GetModelBounds(art, parent);
-        if (bounds.size.y < 0.01f) return;
-        Vector3 scale = new Vector3(
-            desiredSize.x / Mathf.Max(0.05f, bounds.size.x),
-            desiredSize.y / Mathf.Max(0.05f, bounds.size.y),
-            desiredSize.z / Mathf.Max(0.05f, bounds.size.z));
-        if (label.Contains("tree") || label.Contains("grass"))
-            scale = Vector3.one * (desiredSize.y / Mathf.Max(0.05f, bounds.size.y));
-        art.transform.localScale = scale;
-        art.transform.localPosition = new Vector3(
-            -bounds.center.x * scale.x,
-            -bounds.min.y * scale.y,
-            -bounds.center.z * scale.z);
-        AdaptMaterialRenderers(art, label.Contains("tree") || label.Contains("grass"));
     }
 
     private Bounds GetModelBounds(GameObject model, Transform origin)
@@ -1087,11 +1097,6 @@ public partial class DreamGardenGenerator : MonoBehaviour
             Vector3.zero, new Vector3(1.7f, .04f, 1.7f), pinkMaterial);
         Collider collider = ring.GetComponent<Collider>();
         if (collider != null) collider.enabled = false;
-    }
-
-    private void CreateStarMesh(Transform parent)
-    {
-        CreateStarMesh(parent, new Vector3(0f, 2.9f, 0f), 0.8f, lightMaterial);
     }
 
     private void CreateStarMesh(Transform parent, Vector3 localPosition, float scale, Material material)
