@@ -20,7 +20,6 @@ public class Crystal : MonoBehaviour
 
     void Update()
     {
-        // Spin around the crystal's own up axis and float up and down
         transform.Rotate(Vector3.up, spinSpeed * Time.deltaTime, Space.Self);
         transform.localPosition = startLocalPos +
             Vector3.up * (Mathf.Sin(Time.time * bobSpeed) * bobHeight);

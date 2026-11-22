@@ -1,7 +1,6 @@
-
+using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
-using UnityEngine;
 
 public class CrystalSpawner : MonoBehaviour
 {
@@ -100,7 +99,6 @@ public class CrystalSpawner : MonoBehaviour
             GameObject crystalObject =
                 Instantiate(crystalPrefab, crystalPos, crystalRot, transform);
 
-            // Find a nearby position on the planet for the enemy.
             if (enemyPrefab != null)
             {
                 Vector3 tangent = Vector3.ProjectOnPlane(
@@ -125,7 +123,7 @@ public class CrystalSpawner : MonoBehaviour
                     Vector3 enemyOutward =
                         (enemyHit.point - transform.position).normalized;
 
-                    if (Vector3.Angle(enemyHit.normal, enemyOutward) <= 20f)
+                    if (Vector3.Angle(enemyHit.normal, enemyOutward) <= 45f)
                     {
                         Vector3 enemyPos =
                             enemyHit.point +

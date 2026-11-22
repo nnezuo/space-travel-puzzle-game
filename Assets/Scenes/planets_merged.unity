@@ -86308,7 +86308,7 @@ MonoBehaviour:
   samples: 3000
   minSeparation: 8
   hoverHeight: 1
-  enemyDistance: 4
+  enemyDistance: 1
   enemySurfaceOffset: 1
 --- !u!114 &346379030
 MonoBehaviour:

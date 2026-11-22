@@ -86,7 +86,7 @@ public class PlanetBiomeColor : MonoBehaviour
         // (river - 0.4) * 3: no blue under 0.4, full blue from about 0.73
         c = Color.Lerp(c, water, Mathf.Clamp01((river - 0.4f) * 3f));
 
-        // Use the Path Color from the Inspector
+        // Using the Path Color from the Inspector
         c = Color.Lerp(c, pathColor, Mathf.Clamp01(path * 2f));
         // ------------------------------------------
 

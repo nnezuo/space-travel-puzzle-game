@@ -7,44 +7,46 @@ public class PlayerAttack : MonoBehaviour
     public int damage = 1;
     public KeyCode attackKey = KeyCode.F;
 
-    void Update()
+    private void Update()
     {
         if (Input.GetKeyDown(attackKey))
         {
-            Attack();
+            PerformAttack();
         }
     }
 
-    void Attack()
+    private void PerformAttack()
     {
-        PlanetEnemy[] enemies =
-            FindObjectsByType<PlanetEnemy>(FindObjectsSortMode.None);
+        PlanetEnemy target = FindNearestEnemyWithinRange();
 
-        PlanetEnemy closestEnemy = null;
-        float closestDistance = attackRange;
-
-        foreach (PlanetEnemy enemy in enemies)
+        if (target != null)
         {
-            float distance = Vector3.Distance(
-                transform.position,
-                enemy.transform.position
-            );
-
-            if (distance <= closestDistance)
-            {
-                closestDistance = distance;
-                closestEnemy = enemy;
-            }
-        }
-
-        if (closestEnemy != null)
-        {
-            closestEnemy.TakeDamage(damage);
+            target.TakeDamage(damage);
             GameHUD.Say("You hit the enemy!", GameHUD.Kind.Combat);
         }
         else
         {
             GameHUD.Say("No enemy close enough to attack", GameHUD.Kind.Info);
         }
+    }
+
+    private PlanetEnemy FindNearestEnemyWithinRange()
+    {
+        PlanetEnemy[] enemies = FindObjectsByType<PlanetEnemy>(FindObjectsSortMode.None);
+        PlanetEnemy nearest = null;
+        float nearestDistance = attackRange;
+
+        foreach (PlanetEnemy enemy in enemies)
+        {
+            float distance = Vector3.Distance(transform.position, enemy.transform.position);
+
+            if (distance <= nearestDistance)
+            {
+                nearestDistance = distance;
+                nearest = enemy;
+            }
+        }
+
+        return nearest;
     }
 }
