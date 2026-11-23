@@ -1,25 +1,37 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public class DreamGardenHUD : MonoBehaviour
 {
     public DreamPuzzleController puzzle;
     public Planet1Puzzle firstPlanetPuzzle;
-    public DreamTravelPortal portal;
+    public DreamTravelPortal portal; // Kept for Inspector wiring; travel uses the scene portal.
     private GUIStyle title, line, center, button;
     private bool introductionShown;
     private bool introductionOpen;
-    private PlayerController suspendedController;
+    private readonly List<Behaviour> pausedBehaviours = new List<Behaviour>();
     private Rigidbody suspendedBody;
-    private bool controllerWasEnabled;
     private bool bodyWasKinematic;
     private CursorLockMode previousCursorLock;
     private bool previousCursorVisible;
 
     private void Update()
     {
+        SyncPlanet1Progress();
         if (introductionShown || introductionOpen || puzzle == null || !puzzle.Ready ||
             !puzzle.PlayerInGarden || puzzle.DialogueOpen || DreamSceneFlow.Busy) return;
         OpenIntroduction();
+    }
+
+    private void SyncPlanet1Progress()
+    {
+        // Do not re-mark the flag after a restart reset while the old scene
+        // is still alive during DreamSceneFlow's asynchronous reload.
+        if (DreamSceneFlow.Busy) return;
+        // The portal flow unlocks on Planet1Puzzle completion but does not
+        // update the session flag used by the finale and the return portal.
+        if (firstPlanetPuzzle != null && firstPlanetPuzzle.IsComplete && !DreamProgression.Planet1Solved)
+            DreamProgression.MarkPlanet1Solved();
     }
 
     private void OpenIntroduction()
@@ -28,27 +40,42 @@ public class DreamGardenHUD : MonoBehaviour
         introductionShown = true;
         introductionOpen = true;
         puzzle.IntroOpen = true;
-        if (puzzle.player != null)
-        {
-            suspendedController = puzzle.player.GetComponent<PlayerController>();
-            suspendedBody = puzzle.player.GetComponent<Rigidbody>();
-            if (suspendedController != null)
-            {
-                controllerWasEnabled = suspendedController.enabled;
-                suspendedController.enabled = false;
-            }
-            if (suspendedBody != null)
-            {
-                bodyWasKinematic = suspendedBody.isKinematic;
-                suspendedBody.linearVelocity = Vector3.zero;
-                suspendedBody.angularVelocity = Vector3.zero;
-                suspendedBody.isKinematic = true;
-            }
-        }
+        PausePlayer();
+        // Capture the cursor once; CloseIntroduction restores exactly this state.
         previousCursorLock = Cursor.lockState;
         previousCursorVisible = Cursor.visible;
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
+    }
+
+    private void PausePlayer()
+    {
+        if (puzzle.player == null) return;
+        Pause(puzzle.player.GetComponent<PlayerController>());
+        Pause(puzzle.player.GetComponent<PlayerAttack>());
+        foreach (PlanetCamera camera in FindObjectsByType<PlanetCamera>())
+        {
+            if (camera.target != puzzle.player) continue;
+            Pause(camera);
+            Pause(camera.GetComponent<DreamCameraOcclusion>());
+        }
+        suspendedBody = puzzle.player.GetComponent<Rigidbody>();
+        if (suspendedBody == null) return;
+        bodyWasKinematic = suspendedBody.isKinematic;
+        if (!bodyWasKinematic)
+        {
+            suspendedBody.linearVelocity = Vector3.zero;
+            suspendedBody.angularVelocity = Vector3.zero;
+        }
+        suspendedBody.isKinematic = true;
+    }
+
+    private void Pause(Behaviour behaviour)
+    {
+        // Only re-enable controls this screen disabled, not controls already off.
+        if (behaviour == null || !behaviour.enabled) return;
+        pausedBehaviours.Add(behaviour);
+        behaviour.enabled = false;
     }
 
     private void CloseIntroduction()
@@ -56,10 +83,18 @@ public class DreamGardenHUD : MonoBehaviour
         if (!introductionOpen) return;
         introductionOpen = false;
         if (puzzle != null) puzzle.IntroOpen = false;
-        if (suspendedBody != null) suspendedBody.isKinematic = bodyWasKinematic;
-        if (suspendedController != null) suspendedController.enabled = controllerWasEnabled;
+        ResumePlayer();
         Cursor.lockState = previousCursorLock;
         Cursor.visible = previousCursorVisible;
+    }
+
+    private void ResumePlayer()
+    {
+        foreach (Behaviour behaviour in pausedBehaviours)
+            if (behaviour != null) behaviour.enabled = true;
+        pausedBehaviours.Clear();
+        if (suspendedBody != null) suspendedBody.isKinematic = bodyWasKinematic;
+        suspendedBody = null;
     }
 
     private void OnDisable() => CloseIntroduction();
@@ -68,6 +103,7 @@ public class DreamGardenHUD : MonoBehaviour
     {
         if (firstPlanetPuzzle == null)
             firstPlanetPuzzle = FindAnyObjectByType<Planet1Puzzle>();
+        SyncPlanet1Progress();
     }
 
     private void OnGUI()
@@ -150,9 +186,12 @@ public class DreamGardenHUD : MonoBehaviour
         GUI.Label(new Rect(200, 190, 560, 60), "THE STARS REMEMBER HOME", center);
         GUI.Label(new Rect(215, 260, 530, 95),
             "You restored the two planetary cores and returned home.\nThe worlds are reunited. Your journey is complete.", center);
-        if (Application.CanStreamedLevelBeLoaded("two_planets") &&
-            GUI.Button(new Rect(315, 390, 330, 45), "Restart campaign", button))
-            DreamSceneFlow.TryLoad("two_planets", true);
+        // The merged scene is not always present; reload the active scene instead.
+        string restartScene = Application.CanStreamedLevelBeLoaded("two_planets")
+            ? "two_planets"
+            : UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
+        if (GUI.Button(new Rect(315, 390, 330, 45), "Restart campaign", button))
+            DreamSceneFlow.TryLoad(restartScene, true);
     }
 
     private void DrawGarden()

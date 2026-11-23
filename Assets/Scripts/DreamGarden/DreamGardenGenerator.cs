@@ -74,6 +74,8 @@ public partial class DreamGardenGenerator : MonoBehaviour
     private readonly List<Material> ownedMaterials = new List<Material>();
     public IReadOnlyList<Vector2Int> SolutionRoute { get; private set; }
 
+    // Explicit rebuild: creates geometry and materials, then binds the puzzle.
+    // Normal startup uses EnsureInitialized instead and keeps saved objects.
     [ContextMenu("Generate Dream Garden")]
     public void GenerateDreamGarden()
     {
@@ -171,8 +173,15 @@ public partial class DreamGardenGenerator : MonoBehaviour
 
     public void EnsureInitialized()
     {
-        // bind the objects already serialized in the scene; never overwrite manual edits
+        // Normal startup: only bind objects already serialized in the scene;
+        // never regenerate geometry, re-roll random values or overwrite manual edits.
         EnsureEnglishSceneText();
+        if (puzzle == null)
+        {
+            puzzle = FindAnyObjectByType<DreamPuzzleController>();
+            if (puzzle != null)
+                Debug.LogWarning("Dream Garden generator had no puzzle reference; bound the scene's DreamPuzzleController.", this);
+        }
         if (puzzle != null && puzzle.Ready) return;
         DreamLantern[] existing = GetComponentsInChildren<DreamLantern>(true);
         if (existing.Length == 0)
@@ -195,11 +204,52 @@ public partial class DreamGardenGenerator : MonoBehaviour
             Debug.LogError("Dream garden needs its puzzle manager and castle exit.", this);
             return;
         }
+        if (!HasRequiredChallenges(existing[0].transform.parent))
+        {
+            Debug.LogError("Dream Garden saved challenges are incomplete (Keeper, three Petals, four Astrals required). Reopen a baked scene or rebuild explicitly in the Editor.", this);
+            return;
+        }
+        if (puzzle.planetGravity == null)
+        {
+            puzzle.planetGravity = GetComponentInChildren<GravitySource>(true);
+            if (puzzle.planetGravity == null)
+            {
+                Debug.LogError("Dream Garden needs its GravitySource. Reopen a baked scene or rebuild explicitly in the Editor.", this);
+                return;
+            }
+        }
         foreach (DreamLantern lantern in existing)
             if (lantern.GetComponent<DreamAnchor>() == null) lantern.gameObject.AddComponent<DreamAnchor>();
-        puzzle.planetGravity = GetComponentInChildren<GravitySource>(true);
         puzzle.Initialize(new List<DreamLantern>(existing),
             new List<DreamPhaseGate>(GetComponentsInChildren<DreamPhaseGate>(true)), exit.position);
+    }
+
+    private static bool HasRequiredChallenges(Transform garden)
+    {
+        if (garden == null) return false;
+        bool keeper = false;
+        bool[] petals = new bool[3];
+        bool[] astrals = new bool[4];
+        foreach (DreamInteraction interaction in garden.GetComponentsInChildren<DreamInteraction>(true))
+        {
+            if (interaction == null) continue;
+            switch (interaction.kind)
+            {
+                case DreamInteraction.Kind.Keeper:
+                    keeper = true;
+                    break;
+                case DreamInteraction.Kind.Petal:
+                    if (interaction.index >= 0 && interaction.index < petals.Length) petals[interaction.index] = true;
+                    break;
+                case DreamInteraction.Kind.Astral:
+                    if (interaction.index >= 0 && interaction.index < astrals.Length) astrals[interaction.index] = true;
+                    break;
+            }
+        }
+        if (!keeper) return false;
+        foreach (bool petal in petals) if (!petal) return false;
+        foreach (bool astral in astrals) if (!astral) return false;
+        return true;
     }
 
     private void EnsureEnglishSceneText()

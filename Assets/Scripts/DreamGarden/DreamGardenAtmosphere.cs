@@ -3,6 +3,7 @@ using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 
 // a local volume follows the garden; planet 1 and shared scene lighting stay untouched
+[DefaultExecutionOrder(1001)] // after DayNightController's LateUpdate writes the sky
 public sealed class DreamGardenAtmosphere : MonoBehaviour
 {
     public Volume volume;
@@ -22,17 +23,21 @@ public sealed class DreamGardenAtmosphere : MonoBehaviour
 
     private void Start()
     {
-        if (puzzle != null && puzzle.player != null)
-        {
-            PlayerController actor = puzzle.player.GetComponent<PlayerController>();
-            if (actor != null && actor.cameraTransform != null) view = actor.cameraTransform.GetComponent<Camera>();
-        }
+        ResolveView();
         if (volume != null)
         {
             ownedProfile = volume.profile;
             ownedProfile.TryGet(out colors);
             ownedProfile.TryGet(out glow);
         }
+    }
+
+    private void ResolveView()
+    {
+        if (view != null || puzzle == null || puzzle.player == null) return;
+        PlayerController actor = puzzle.player.GetComponent<PlayerController>();
+        if (actor != null && actor.cameraTransform != null)
+            view = actor.cameraTransform.GetComponent<Camera>();
     }
 
     public void SetPhase(bool isBloom)
@@ -56,6 +61,13 @@ public sealed class DreamGardenAtmosphere : MonoBehaviour
             colors.saturation.value = Mathf.Lerp(-32f, 8f, blend);
         }
         if (glow != null) glow.intensity.value = Mathf.Lerp(.18f, .3f, blend);
+    }
+
+    private void LateUpdate()
+    {
+        // DayNightController writes the background in LateUpdate at order 0.
+        // Order 1001 makes the garden color win while the player is inside.
+        ResolveView();
         if (view != null && puzzle != null && puzzle.PlayerInGarden)
         {
             if (!ownsBackground)

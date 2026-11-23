@@ -121,6 +121,7 @@ public partial class DreamGardenGenerator
 
     private void CreateChallenges(List<Vector2Int> route)
     {
+        // The BFS route is the placement spine; step spaces the challenges evenly.
         int step = (route.Count - 1) / 4;
         CreateKeeper(route, step);
         CreatePetalSeals(route, step);

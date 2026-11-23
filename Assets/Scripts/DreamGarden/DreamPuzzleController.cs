@@ -7,6 +7,7 @@ public class DreamPuzzleController : MonoBehaviour
     public GravitySource planetGravity;
     [Range(.4f, 1f)] public float ruinGravityMultiplier = .7f;
     public float interactionDistance = 2.8f;
+    // Kept for Inspector and editor tooling; gameplay travel uses the scene portal.
     public string firstPlanetScene = "JuliaPlanet1";
 
     private readonly List<DreamLantern> lanterns = new List<DreamLantern>();
@@ -14,7 +15,7 @@ public class DreamPuzzleController : MonoBehaviour
     private readonly List<DreamAnchor> anchors = new List<DreamAnchor>();
     private readonly List<DreamInteraction> interactions = new List<DreamInteraction>();
     private DreamDialogue dialogue;
-    private DreamGardenAtmosphere atmosphere;
+    private DreamGardenAtmosphere gardenAtmosphere;
     private bool checkpointBloom;
     public bool DialogueOpen => dialogue != null && dialogue.IsOpen;
     public bool IntroOpen { get; set; }
@@ -37,6 +38,12 @@ public class DreamPuzzleController : MonoBehaviour
     public int MemoryCount => lanterns.Count;
     public bool Finished => finished;
     public bool Ready => initialized;
+
+    // Shared input guard. Q and R stay available after the beacon is restored.
+    private bool InputAllowed => initialized && player != null && !DreamSceneFlow.Busy &&
+        !DialogueOpen && !IntroOpen && PlayerInGarden;
+    private bool CanInteract => InputAllowed && !finished;
+
     public string Notice => Time.unscaledTime < noticeUntil ? notice : "";
     public Vector3 ExitPosition => exitPosition;
     public bool CanShift => initialized && GetNearbyAnchor() != null;
@@ -70,7 +77,7 @@ public class DreamPuzzleController : MonoBehaviour
         {
             anchors.AddRange(garden.GetComponentsInChildren<DreamAnchor>(true));
             interactions.AddRange(garden.GetComponentsInChildren<DreamInteraction>(true));
-            atmosphere = garden.GetComponent<DreamGardenAtmosphere>();
+            gardenAtmosphere = garden.GetComponent<DreamGardenAtmosphere>();
         }
         dialogue = GetComponent<DreamDialogue>();
         if (dialogue == null) dialogue = gameObject.AddComponent<DreamDialogue>();
@@ -88,17 +95,16 @@ public class DreamPuzzleController : MonoBehaviour
 
     private void Update()
     {
-        if (!initialized || player == null || DreamSceneFlow.Busy || DialogueOpen || IntroOpen || !PlayerInGarden) return;
+        if (!InputAllowed) return;
         UpdateInitialCheckpoint();
-        // the castle exit restores the beacon, but the player must still reach
-        // the return portal. keep phase shifts and checkpoints available.
+        // Q and R stay available after the beacon: the return portal is still ahead.
         if (Input.GetKeyDown(KeyCode.Q)) TryShift();
-        if (!finished && Input.GetKeyDown(KeyCode.E)) TryInteract();
+        if (Input.GetKeyDown(KeyCode.E)) TryInteract();
         if (Input.GetKeyDown(KeyCode.R)) ReturnToCheckpoint();
     }
     public bool TryShift()
     {
-        if (!initialized || DreamSceneFlow.Busy || DialogueOpen || IntroOpen || !PlayerInGarden) return false;
+        if (!InputAllowed) return false;
         if (!CanShift) { ShowNotice("Approach a pedestal to shift between Bloom and Ruin.", 3); return false; }
         SetPhase(!isBloom);
         ShowNotice(isBloom ? "Bloom: the rose-colored paths awaken." : "Ruin: the violet passages awaken.", 3);
@@ -114,23 +120,27 @@ public class DreamPuzzleController : MonoBehaviour
         }
         foreach (DreamPhaseGate gate in gates) if (gate != null) gate.ApplyPhase(bloom);
         foreach (DreamInteraction interaction in interactions) if (interaction != null) interaction.Refresh(bloom);
-        if (atmosphere != null) atmosphere.SetPhase(bloom);
+        if (gardenAtmosphere != null) gardenAtmosphere.SetPhase(bloom);
     }
+    // Interaction priority is fixed: exit beacon, then mechanism, then memory.
     public bool TryInteract()
     {
-        if (!initialized || finished || player == null || DreamSceneFlow.Busy || DialogueOpen || IntroOpen || !PlayerInGarden) return false;
-        if (memoriesCollected == 3 && AtExit())
-        {
-            finished = true;
-            DreamProgression.MarkPlanet2Solved();
-            ShowNotice("Planet 2 complete! Return through the portal to Planet 1 to finish your journey. Q and R remain available.", 8);
-            return true;
-        }
+        if (!CanInteract) return false;
+        if (memoriesCollected == 3 && AtExit()) return RestoreBeacon();
+
         DreamInteraction mechanism = GetNearbyInteraction();
         if (mechanism != null) return UseMechanism(mechanism);
 
         DreamLantern memory = GetNearbyLantern();
         return memory != null && TryRestoreMemory(memory);
+    }
+
+    private bool RestoreBeacon()
+    {
+        finished = true;
+        DreamProgression.MarkPlanet2Solved();
+        ShowNotice("Planet 2 complete! Return through the portal to Planet 1 to finish your journey. Q and R remain available.", 8);
+        return true;
     }
 
     private bool TryRestoreMemory(DreamLantern memory)
@@ -291,35 +301,41 @@ public class DreamPuzzleController : MonoBehaviour
 
     private bool UseMechanism(DreamInteraction mechanism)
     {
-        if (mechanism.kind == DreamInteraction.Kind.Inscription)
-        {
-            dialogue.Open(player, mechanism.title, new[] { mechanism.inscription });
-            return true;
-        }
-        if (mechanism.kind == DreamInteraction.Kind.Keeper) return SpeakToKeeper(mechanism);
-
         bool accepted;
-        if (mechanism.kind == DreamInteraction.Kind.Petal)
+        switch (mechanism.kind)
         {
-            accepted = DreamProgression.PressPetal(mechanism.index, isBloom);
-            ShowNotice(accepted ? "The garden remembers: " + DreamProgression.PetalSteps + " / 3 seals."
-                : "Moon must be restored first. Follow Root / Ruin > Dew / Bloom > Blossom / Ruin. Lit seals stay awake.", 5);
-        }
-        else
-        {
-            accepted = DreamProgression.PressAstral(mechanism.index, isBloom);
-            string message;
-            if (accepted)
-                message = "The constellation answers: " + DreamProgression.AstralSteps + " / 4.";
-            else if (memoriesCollected != 2)
-                message = "Restore Petal before waking the constellation.";
-            else if (!isBloom)
-                message = "The stars answer only in Bloom.";
-            else
-                message = "The constellation falls silent. Read the pilgrim's story and begin again.";
-            ShowNotice(message, 5);
+            case DreamInteraction.Kind.Inscription:
+                dialogue.Open(player, mechanism.title, new[] { mechanism.inscription });
+                return true;
+            case DreamInteraction.Kind.Keeper:
+                return SpeakToKeeper(mechanism);
+            case DreamInteraction.Kind.Petal:
+                accepted = PressPetalSeal(mechanism);
+                break;
+            default:
+                accepted = PressAstralSymbol(mechanism);
+                break;
         }
         foreach (DreamInteraction interaction in interactions) if (interaction != null) interaction.Refresh(isBloom);
+        return accepted;
+    }
+
+    private bool PressPetalSeal(DreamInteraction mechanism)
+    {
+        bool accepted = DreamProgression.PressPetal(mechanism.index, isBloom);
+        ShowNotice(accepted ? "The garden remembers: " + DreamProgression.PetalSteps + " / 3 seals."
+            : "Moon must be restored first. Follow Root / Ruin > Dew / Bloom > Blossom / Ruin. Lit seals stay awake.", 5);
+        return accepted;
+    }
+
+    private bool PressAstralSymbol(DreamInteraction mechanism)
+    {
+        bool accepted = DreamProgression.PressAstral(mechanism.index, isBloom);
+        string message = accepted ? "The constellation answers: " + DreamProgression.AstralSteps + " / 4." :
+            memoriesCollected != 2 ? "Restore Petal before waking the constellation." :
+            !isBloom ? "The stars answer only in Bloom." :
+            "The constellation falls silent. Read the pilgrim's story and begin again.";
+        ShowNotice(message, 5);
         return accepted;
     }
 

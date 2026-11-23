@@ -16,8 +16,8 @@ public sealed class DreamMazeLayout
     public int Step => (Route.Count - 1) / 4;
 
     // North, east, south, west: the generator uses the same direction indices.
-    private static readonly int[] RowOffsets = { 1, 0, -1, 0 };
-    private static readonly int[] ColumnOffsets = { 0, 1, 0, -1 };
+    private static readonly int[] DirectionRowDelta = { 1, 0, -1, 0 };
+    private static readonly int[] DirectionColumnDelta = { 0, 1, 0, -1 };
 
     public DreamMazeLayout(int size, int seed)
     {
@@ -27,6 +27,8 @@ public sealed class DreamMazeLayout
         bool[,,] bestOpenings = null;
         List<Cell> bestRoute = null;
 
+        // DFS carves a cycle-free maze; BFS finds the entrance-to-exit route.
+        // Keep the longest route of up to 128 attempts, as before.
         for (int attempt = 0; attempt < 128; attempt++)
         {
             CarveMaze(random);
@@ -59,8 +61,8 @@ public sealed class DreamMazeLayout
             var choices = new List<int>();
             for (int direction = 0; direction < 4; direction++)
             {
-                int row = cell.Row + RowOffsets[direction];
-                int col = cell.Col + ColumnOffsets[direction];
+                int row = cell.Row + DirectionRowDelta[direction];
+                int col = cell.Col + DirectionColumnDelta[direction];
                 if (row >= 0 && row < Size && col >= 0 && col < Size && !visited[row, col])
                     choices.Add(direction);
             }
@@ -71,21 +73,22 @@ public sealed class DreamMazeLayout
                 continue;
             }
 
-            // All available neighbours participate in the draw (at most three).
-            // Keep this ordering to preserve the layouts produced by existing seeds.
+            // Farthest neighbour first (row + col descending); ties keep the
+            // direction order added above. This exact order is part of the seed layout.
             choices.Sort((a, b) =>
             {
-                int firstRow = cell.Row + RowOffsets[a];
-                int firstCol = cell.Col + ColumnOffsets[a];
-                int secondRow = cell.Row + RowOffsets[b];
-                int secondCol = cell.Col + ColumnOffsets[b];
+                int firstRow = cell.Row + DirectionRowDelta[a];
+                int firstCol = cell.Col + DirectionColumnDelta[a];
+                int secondRow = cell.Row + DirectionRowDelta[b];
+                int secondCol = cell.Col + DirectionColumnDelta[b];
                 int firstDistance = firstRow + firstCol;
                 int secondDistance = secondRow + secondCol;
                 return secondDistance.CompareTo(firstDistance);
             });
 
+            // A grid cell has at most three unvisited neighbours; all are drawn.
             int chosen = choices[random.Next(Math.Min(choices.Count, 3))];
-            Cell next = new Cell(cell.Row + RowOffsets[chosen], cell.Col + ColumnOffsets[chosen]);
+            Cell next = new Cell(cell.Row + DirectionRowDelta[chosen], cell.Col + DirectionColumnDelta[chosen]);
             Openings[cell.Row, cell.Col, chosen] = true;
             Openings[next.Row, next.Col, (chosen + 2) % 4] = true;
             visited[next.Row, next.Col] = true;
@@ -95,7 +98,7 @@ public sealed class DreamMazeLayout
 
     private List<Cell> FindRoute()
     {
-        // BFS records parents for the entrance-to-exit route used to place the challenges.
+        // BFS finds the shortest entrance-to-exit path; parent links rebuild it for challenge placement.
         var queue = new Queue<Cell>();
         var seen = new bool[Size, Size];
         var parent = new Cell[Size, Size];
@@ -108,7 +111,7 @@ public sealed class DreamMazeLayout
             for (int direction = 0; direction < 4; direction++)
             {
                 if (!Openings[cell.Row, cell.Col, direction]) continue;
-                Cell next = new Cell(cell.Row + RowOffsets[direction], cell.Col + ColumnOffsets[direction]);
+                Cell next = new Cell(cell.Row + DirectionRowDelta[direction], cell.Col + DirectionColumnDelta[direction]);
                 if (seen[next.Row, next.Col]) continue;
                 seen[next.Row, next.Col] = true;
                 parent[next.Row, next.Col] = cell;

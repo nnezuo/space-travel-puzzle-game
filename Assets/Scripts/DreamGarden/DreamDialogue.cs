@@ -31,6 +31,7 @@ public sealed class DreamDialogue : MonoBehaviour
         validateAnswer = checkAnswer;
         completionCallback = onCompleted;
         scroll = Vector2.zero;
+        // Capture cursor and enabled controls once; Close restores exactly this state.
         cursorLock = Cursor.lockState;
         cursorVisible = Cursor.visible;
         PausePlayer(player);
@@ -65,6 +66,7 @@ public sealed class DreamDialogue : MonoBehaviour
 
     private void Pause(Behaviour behaviour)
     {
+        // Only re-enable controls this dialogue disabled, not controls already off.
         if (behaviour == null || !behaviour.enabled) return;
         pausedBehaviours.Add(behaviour);
         behaviour.enabled = false;
@@ -110,6 +112,11 @@ public sealed class DreamDialogue : MonoBehaviour
             focusAnswer = true;
             return;
         }
+        CompleteRiddle();
+    }
+
+    private void CompleteRiddle()
+    {
         // Restore controls before notifying the puzzle; Close clears the stored callback.
         Action callback = completionCallback;
         Close();
