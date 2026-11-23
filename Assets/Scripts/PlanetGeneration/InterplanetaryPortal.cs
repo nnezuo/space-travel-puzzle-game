@@ -37,6 +37,8 @@ public class InterplanetaryPortal : MonoBehaviour
     public Planet1Puzzle requiredPuzzle;
     [Tooltip("Also require every enemy on the level to be dead")]
     public bool requireAllEnemiesDead = false;
+    [Tooltip("Also require the Dream Garden to be completed (three memories and the castle exit)")]
+    public bool requireGardenComplete = false;
 
     [Header("Settings")]
     public float activationDistance = 3.5f;
@@ -45,6 +47,7 @@ public class InterplanetaryPortal : MonoBehaviour
     // "=>" here makes a property that is calculated each time we read it
     bool IsUnlocked =>
         (requiredPuzzle == null || requiredPuzzle.IsComplete) &&
+        (!requireGardenComplete || DreamProgression.Planet2Solved) &&
         (!requireAllEnemiesDead || PlanetEnemy.All.Count == 0);
 
     void Update()
@@ -60,7 +63,10 @@ public class InterplanetaryPortal : MonoBehaviour
 
         if (!IsUnlocked)
         {
-            GameHUD.Prompt("The portal is sealed. Defeat the enemies and touch the crystals.");
+            if (requireGardenComplete && !DreamProgression.Planet2Solved)
+                GameHUD.Prompt("The portal is sealed. Complete the Dream Garden first.");
+            else
+                GameHUD.Prompt("The portal is sealed. Defeat the enemies and touch the crystals.");
             return;
         }
 
