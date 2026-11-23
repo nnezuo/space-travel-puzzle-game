@@ -166634,6 +166634,7 @@ MonoBehaviour:
   destinationGravity: {fileID: 346379031}
   requiredPuzzle: {fileID: 0}
   requireAllEnemiesDead: 0
+  requireGardenComplete: 1
   activationDistance: 3.5
   useKey: 101
 --- !u!1001 &707373206
