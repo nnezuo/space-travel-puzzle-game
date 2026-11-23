@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 
-// geometry and environmental storytelling share the generator's seed and route
+// Continues DreamGardenGenerator with courtyard geometry, challenges and atmosphere.
 public partial class DreamGardenGenerator
 {
     private readonly List<Mesh> ownedMeshes = new List<Mesh>();
@@ -62,7 +62,7 @@ public partial class DreamGardenGenerator
             }
     }
 
-    private GameObject AtCell(Vector2Int cell, string label, float side = 0)
+    private GameObject CreateObjectAtCell(Vector2Int cell, string label, float side = 0)
     {
         float half = (mazeCells - 1) * .5f;
         Vector2 offset = Vector2.one * side;
@@ -82,40 +82,57 @@ public partial class DreamGardenGenerator
         return root;
     }
 
-    private DreamInteraction Mechanism(Vector2Int cell, DreamInteraction.Kind kind, int index, string title)
+    private DreamInteraction CreateMechanism(Vector2Int cell, DreamInteraction.Kind kind, int index, string title)
     {
-        GameObject root = AtCell(cell, title, 1.05f);
+        GameObject root = CreateObjectAtCell(cell, title, 1.05f);
         DreamInteraction interaction = root.AddComponent<DreamInteraction>();
-        interaction.kind = kind; interaction.index = index; interaction.title = title;
+        interaction.kind = kind;
+        interaction.index = index;
+        interaction.title = title;
         root.AddComponent<DreamAnchor>();
         GameObject plinth = CreatePart(root.transform, PrimitiveType.Cylinder, "weathered mechanism base",
             new Vector3(0, .3f, 0), new Vector3(.75f, .3f, .75f), stoneMaterial);
         BoxCollider collider = root.AddComponent<BoxCollider>();
-        collider.center = new Vector3(0, .5f, 0); collider.size = new Vector3(.65f, 1f, .65f);
+        collider.center = new Vector3(0, .5f, 0);
+        collider.size = new Vector3(.65f, 1f, .65f);
         DisableCollider(plinth);
         GameObject seal = CreatePart(root.transform, PrimitiveType.Sphere, "memory seal",
             new Vector3(0, 1.1f, 0), new Vector3(.35f, .35f, .35f), lightMaterial);
         DisableCollider(seal);
         interaction.indicator = seal.GetComponent<Renderer>();
-        Label(root.transform, title, new Vector3(0, 1.7f, 0));
+        CreateWorldLabel(root.transform, title, new Vector3(0, 1.7f, 0));
         return interaction;
     }
 
-    private void Label(Transform parent, string value, Vector3 localPosition)
+    private void CreateWorldLabel(Transform parent, string value, Vector3 localPosition)
     {
         GameObject label = new GameObject("inscribed name");
-        label.transform.SetParent(parent, false); label.transform.localPosition = localPosition;
+        label.transform.SetParent(parent, false);
+        label.transform.localPosition = localPosition;
         TextMesh text = label.AddComponent<TextMesh>();
-        text.text = value; text.fontSize = 48; text.characterSize = .035f;
-        text.anchor = TextAnchor.MiddleCenter; text.alignment = TextAlignment.Center;
+        text.text = value;
+        text.fontSize = 48;
+        text.characterSize = .035f;
+        text.anchor = TextAnchor.MiddleCenter;
+        text.alignment = TextAlignment.Center;
         text.color = new Color(.96f, .88f, .68f);
         label.AddComponent<DreamWorldLabel>();
     }
 
     private void CreateChallenges(List<Vector2Int> route)
     {
+        // The BFS route is the placement spine; step spaces the challenges evenly.
         int step = (route.Count - 1) / 4;
-        DreamInteraction keeper = Mechanism(route[step - 1], DreamInteraction.Kind.Keeper, 0, "The Forgotten Keeper");
+        CreateKeeper(route, step);
+        CreatePetalSeals(route, step);
+        CreateAstralSymbols(route, step);
+        DreamInteraction entry = CreateMechanism(route[1], DreamInteraction.Kind.Inscription, 1, "A gardener's last letter");
+        entry.inscription = "If you find our houses empty, seek the Keeper inside the castle. The Moon must remember before the garden can wake.\n\nThe garden obeys three vows: roots endure in Ruin; dew gathers in Bloom; the last blossom opens in Ruin. Touch their seals in that order.\n\nE: read or interact. Q: shift at a memory stone. R: return to your last restored memory. The final arch requires Moon, Petal and Star.";
+    }
+
+    private void CreateKeeper(List<Vector2Int> route, int step)
+    {
+        DreamInteraction keeper = CreateMechanism(route[step - 1], DreamInteraction.Kind.Keeper, 0, "The Forgotten Keeper");
         Transform figure = keeper.transform;
         Vector3 approach = transform.TransformPoint(CellCenter(route[step - 2].y, route[step - 2].x)) - figure.position;
         figure.rotation = Quaternion.LookRotation(Vector3.ProjectOnPlane(-approach, figure.up), figure.up);
@@ -124,19 +141,27 @@ public partial class DreamGardenGenerator
             new Vector3(0, 1.72f, 0), new Vector3(.55f, .64f, .52f), stoneMaterial);
         GameObject face = CreatePart(figure, PrimitiveType.Sphere, "empty face beneath hood",
             new Vector3(0, 1.73f, -.24f), new Vector3(.33f, .37f, .08f), barkMaterial);
-        DisableCollider(hood); DisableCollider(face);
+        DisableCollider(hood);
+        DisableCollider(face);
         keeper.indicator.transform.localPosition = new Vector3(.32f, 1.15f, -.24f);
         GameObject staff = CreatePart(figure, PrimitiveType.Cylinder, "keeper lantern staff",
             new Vector3(.38f, 1f, 0), new Vector3(.055f, .85f, .055f), barkMaterial);
         DisableCollider(staff);
         Light lantern = keeper.indicator.gameObject.AddComponent<Light>();
-        lantern.color = new Color(.7f, .77f, 1f); lantern.range = 3.5f; lantern.intensity = .7f; lantern.shadows = LightShadows.None;
+        lantern.color = new Color(.7f, .77f, 1f);
+        lantern.range = 3.5f;
+        lantern.intensity = .7f;
+        lantern.shadows = LightShadows.None;
         Transform name = figure.Find("inscribed name");
         if (name != null) name.localPosition = new Vector3(0, 2.35f, 0);
+    }
+
+    private void CreatePetalSeals(List<Vector2Int> route, int step)
+    {
         string[] seals = { "Root | RUIN", "Dew | BLOOM", "Blossom | RUIN" };
         for (int i = 0; i < 3; i++)
         {
-            DreamInteraction seal = Mechanism(route[step * 2 - 3 + i], DreamInteraction.Kind.Petal, i, seals[i]);
+            DreamInteraction seal = CreateMechanism(route[step * 2 - 3 + i], DreamInteraction.Kind.Petal, i, seals[i]);
             // each shape remains readable without relying on color
             for (int petal = 0; petal <= i; petal++)
             {
@@ -145,16 +170,18 @@ public partial class DreamGardenGenerator
                 DisableCollider(mark);
             }
         }
+    }
+
+    private void CreateAstralSymbols(List<Vector2Int> route, int step)
+    {
         string[] symbols = { "Lantern", "Crown", "Seed", "Wing" };
-        DreamInteraction clue = Mechanism(route[step * 3 - 5], DreamInteraction.Kind.Inscription, 0, "The pilgrim's inscription");
+        DreamInteraction clue = CreateMechanism(route[step * 3 - 5], DreamInteraction.Kind.Inscription, 0, "The pilgrim's inscription");
         clue.inscription = "A seed slept beneath the abandoned gate. A lantern warmed its first leaf. A wing carried its blossom beyond the walls. Only then did a crown fall, and the sky remember its stars.\n\nIn Bloom, wake the four names in the order of this journey. A false note silences the whole constellation.";
         for (int i = 0; i < 4; i++)
         {
-            DreamInteraction symbol = Mechanism(route[step * 3 - 4 + i], DreamInteraction.Kind.Astral, i, symbols[i]);
+            DreamInteraction symbol = CreateMechanism(route[step * 3 - 4 + i], DreamInteraction.Kind.Astral, i, symbols[i]);
             CreateStarMesh(symbol.transform, new Vector3(0, 1.1f, .15f), .3f, pedestalStarMaterial);
         }
-        DreamInteraction entry = Mechanism(route[1], DreamInteraction.Kind.Inscription, 1, "A gardener's last letter");
-        entry.inscription = "If you find our houses empty, seek the Keeper inside the castle. The Moon must remember before the garden can wake.\n\nThe garden obeys three vows: roots endure in Ruin; dew gathers in Bloom; the last blossom opens in Ruin. Touch their seals in that order.\n\nE: read or interact. Q: shift at a memory stone. R: return to your last restored memory. The final arch requires Moon, Petal and Star.";
     }
 
     private void CreateAtmosphere()

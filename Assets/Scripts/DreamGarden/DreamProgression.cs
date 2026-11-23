@@ -12,8 +12,16 @@ public static class DreamProgression
     private static readonly int[] astralOrder = { 2, 0, 3, 1 };
     public static bool GameCompleted => Planet1Solved && Planet2Solved;
     public static void MarkPlanet1Solved() => Planet1Solved = true;
-    public static bool ChallengeComplete(int index) => index == 0 ? KeeperRemembered :
-        index == 1 ? PetalSteps == 3 : index == 2 && AstralSteps == 4;
+    public static bool ChallengeComplete(int index)
+    {
+        switch (index)
+        {
+            case 0: return KeeperRemembered;
+            case 1: return PetalSteps == 3;
+            case 2: return AstralSteps == 4;
+            default: return false;
+        }
+    }
 
     public static string NormalizeAnswer(string answer) =>
         string.Join(" ", (answer ?? "").Trim().ToLowerInvariant().Split(
@@ -22,7 +30,8 @@ public static class DreamProgression
     public static bool AnswerKeeper(string answer)
     {
         string normalized = NormalizeAnswer(answer);
-        if (normalized != "silence" && normalized != "silencio" && normalized != "silêncio") return false;
+        bool accepted = normalized == "silence" || normalized == "silencio" || normalized == "silêncio";
+        if (!accepted) return false;
         KeeperRemembered = true;
         return true;
     }
@@ -38,7 +47,11 @@ public static class DreamProgression
     public static bool PressAstral(int symbol, bool bloom)
     {
         if (Memories != 2 || !bloom || AstralSteps == 4) return false;
-        if (symbol != astralOrder[AstralSteps]) { AstralSteps = 0; return false; }
+        if (symbol != astralOrder[AstralSteps])
+        {
+            AstralSteps = 0;
+            return false;
+        }
         AstralSteps++;
         return true;
     }
@@ -52,7 +65,8 @@ public static class DreamProgression
     // all callers share the same completion guard
     public static void RestoreMemory(int count)
     {
-        if (count == Memories + 1 && ChallengeComplete(Memories)) Memories = Mathf.Clamp(count, 0, 3);
+        if (count != Memories + 1 || !ChallengeComplete(Memories)) return;
+        Memories = Mathf.Clamp(count, 0, 3);
     }
     public static void MarkPlanet2Solved() { if (Memories == 3) Planet2Solved = true; }
 

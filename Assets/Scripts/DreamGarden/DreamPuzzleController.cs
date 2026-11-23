@@ -7,6 +7,7 @@ public class DreamPuzzleController : MonoBehaviour
     public GravitySource planetGravity;
     [Range(.4f, 1f)] public float ruinGravityMultiplier = .7f;
     public float interactionDistance = 2.8f;
+    // Kept for Inspector and editor tooling; gameplay travel uses the scene portal.
     public string firstPlanetScene = "JuliaPlanet1";
 
     private readonly List<DreamLantern> lanterns = new List<DreamLantern>();
@@ -14,7 +15,7 @@ public class DreamPuzzleController : MonoBehaviour
     private readonly List<DreamAnchor> anchors = new List<DreamAnchor>();
     private readonly List<DreamInteraction> interactions = new List<DreamInteraction>();
     private DreamDialogue dialogue;
-    private DreamGardenAtmosphere atmosphere;
+    private DreamGardenAtmosphere gardenAtmosphere;
     private bool checkpointBloom;
     public bool DialogueOpen => dialogue != null && dialogue.IsOpen;
     public bool IntroOpen { get; set; }
@@ -37,9 +38,15 @@ public class DreamPuzzleController : MonoBehaviour
     public int MemoryCount => lanterns.Count;
     public bool Finished => finished;
     public bool Ready => initialized;
+
+    // Shared input guard. Q and R stay available after the beacon is restored.
+    private bool InputAllowed => initialized && player != null && !DreamSceneFlow.Busy &&
+        !DialogueOpen && !IntroOpen && PlayerInGarden;
+    private bool CanInteract => InputAllowed && !finished;
+
     public string Notice => Time.unscaledTime < noticeUntil ? notice : "";
     public Vector3 ExitPosition => exitPosition;
-    public bool CanShift => initialized && NearbyAnchor() != null;
+    public bool CanShift => initialized && GetNearbyAnchor() != null;
     public bool PlayerInGarden => player != null && planetGravity != null
         && GravitySource.GetBest(player.position) == planetGravity;
     public string NextMemory => memoriesCollected < 3
@@ -70,7 +77,7 @@ public class DreamPuzzleController : MonoBehaviour
         {
             anchors.AddRange(garden.GetComponentsInChildren<DreamAnchor>(true));
             interactions.AddRange(garden.GetComponentsInChildren<DreamInteraction>(true));
-            atmosphere = garden.GetComponent<DreamGardenAtmosphere>();
+            gardenAtmosphere = garden.GetComponent<DreamGardenAtmosphere>();
         }
         dialogue = GetComponent<DreamDialogue>();
         if (dialogue == null) dialogue = gameObject.AddComponent<DreamDialogue>();
@@ -88,17 +95,16 @@ public class DreamPuzzleController : MonoBehaviour
 
     private void Update()
     {
-        if (!initialized || player == null || DreamSceneFlow.Busy || DialogueOpen || IntroOpen || !PlayerInGarden) return;
+        if (!InputAllowed) return;
         UpdateInitialCheckpoint();
-        // the castle exit restores the beacon, but the player must still reach
-        // the return portal. keep phase shifts and checkpoints available.
+        // Q and R stay available after the beacon: the return portal is still ahead.
         if (Input.GetKeyDown(KeyCode.Q)) TryShift();
-        if (!finished && Input.GetKeyDown(KeyCode.E)) TryInteract();
+        if (Input.GetKeyDown(KeyCode.E)) TryInteract();
         if (Input.GetKeyDown(KeyCode.R)) ReturnToCheckpoint();
     }
     public bool TryShift()
     {
-        if (!initialized || DreamSceneFlow.Busy || DialogueOpen || IntroOpen || !PlayerInGarden) return false;
+        if (!InputAllowed) return false;
         if (!CanShift) { ShowNotice("Approach a pedestal to shift between Bloom and Ruin.", 3); return false; }
         SetPhase(!isBloom);
         ShowNotice(isBloom ? "Bloom: the rose-colored paths awaken." : "Ruin: the violet passages awaken.", 3);
@@ -114,49 +120,63 @@ public class DreamPuzzleController : MonoBehaviour
         }
         foreach (DreamPhaseGate gate in gates) if (gate != null) gate.ApplyPhase(bloom);
         foreach (DreamInteraction interaction in interactions) if (interaction != null) interaction.Refresh(bloom);
-        if (atmosphere != null) atmosphere.SetPhase(bloom);
+        if (gardenAtmosphere != null) gardenAtmosphere.SetPhase(bloom);
     }
+    // Interaction priority is fixed: exit beacon, then mechanism, then memory.
     public bool TryInteract()
     {
-        if (!initialized || finished || player == null || DreamSceneFlow.Busy || DialogueOpen || IntroOpen || !PlayerInGarden) return false;
-        if (memoriesCollected == 3 && AtExit())
-        {
-            finished = true;
-            DreamProgression.MarkPlanet2Solved();
-            ShowNotice("Planet 2 complete! Return through the portal to Planet 1 to finish your journey. Q and R remain available.", 8);
-            return true;
-        }
+        if (!CanInteract) return false;
+        if (memoriesCollected == 3 && AtExit()) return RestoreBeacon();
+
         DreamInteraction mechanism = GetNearbyInteraction();
         if (mechanism != null) return UseMechanism(mechanism);
-        DreamLantern nearby = GetNearbyLantern();
-        if (nearby == null) return false;
-        if (nearby.Activated) { ShowNotice("This memory is already restored. Press Q near a pedestal to shift the dream.", 3); return false; }
-        if (nearby.orderIndex != memoriesCollected) { ShowNotice("Restore the memories in order: Moon > Petal > Star. Your progress is safe.", 4); return false; }
-        bool requiredBloom = nearby.orderIndex != 1;
+
+        DreamLantern memory = GetNearbyLantern();
+        return memory != null && TryRestoreMemory(memory);
+    }
+
+    private bool RestoreBeacon()
+    {
+        finished = true;
+        DreamProgression.MarkPlanet2Solved();
+        ShowNotice("Planet 2 complete! Return through the portal to Planet 1 to finish your journey. Q and R remain available.", 8);
+        return true;
+    }
+
+    private bool TryRestoreMemory(DreamLantern memory)
+    {
+        if (memory.Activated)
+        {
+            ShowNotice("This memory is already restored. Press Q near a pedestal to shift the dream.", 3);
+            return false;
+        }
+        if (memory.orderIndex != memoriesCollected)
+        {
+            ShowNotice("Restore the memories in order: Moon > Petal > Star. Your progress is safe.", 4);
+            return false;
+        }
+        bool requiredBloom = memory.orderIndex != 1;
         if (requiredBloom != isBloom)
         {
             ShowNotice(requiredBloom ? "This memory belongs to Bloom. Press Q near a pedestal." : "This memory belongs to Ruin. Press Q near a pedestal.", 4);
             return false;
         }
-        if (!DreamProgression.ChallengeComplete(nearby.orderIndex))
+        if (!DreamProgression.ChallengeComplete(memory.orderIndex))
         {
-            ShowNotice(nearby.orderIndex == 0 ? "Speak to the Forgotten Keeper and name what the moon has lost." :
-                nearby.orderIndex == 1 ? "Wake Root in Ruin, Dew in Bloom, then Blossom in Ruin." :
+            ShowNotice(memory.orderIndex == 0 ? "Speak to the Forgotten Keeper and name what the moon has lost." :
+                memory.orderIndex == 1 ? "Wake Root in Ruin, Dew in Bloom, then Blossom in Ruin." :
                 "Read the pilgrim's inscription. Light the four astral symbols in order, in Bloom.", 6);
             return false;
         }
-        nearby.Activate();
+        memory.Activate();
         memoriesCollected++;
         DreamProgression.RestoreMemory(memoriesCollected);
-        // keep the checkpoint at the actual player position, not inside a wall
-        checkpoint = player.position + player.up * 0.15f;
-        checkpointRotation = player.rotation;
-        checkpointBloom = isBloom;
-        checkpointReady = true;
+        SaveCheckpoint();
         ShowNotice(memoriesCollected == 3 ? "All three memories are restored. Find the castle archway." :
-            nearby.memoryName + " restored. Next: " + NextMemory + ".", 5);
+            memory.memoryName + " restored. Next: " + NextMemory + ".", 5);
         return true;
     }
+
     public void ReturnToCheckpoint()
     {
         if (player == null || DialogueOpen || IntroOpen || DreamSceneFlow.Busy) return;
@@ -187,13 +207,19 @@ public class DreamPuzzleController : MonoBehaviour
         if (sphere != null) radius = sphere.radius;
         float distance = Vector3.Distance(player.position, planetGravity.transform.position);
         if (Mathf.Abs(distance - radius) > 12f) return;
+        SaveCheckpoint();
+    }
+
+    private void SaveCheckpoint()
+    {
+        // Save the actual player position, not a pedestal position that may overlap a wall.
         checkpoint = player.position + player.up * 0.15f;
         checkpointRotation = player.rotation;
         checkpointBloom = isBloom;
         checkpointReady = true;
     }
 
-    private bool Visible(Transform item, Vector3 point)
+    private bool HasLineOfSight(Transform item, Vector3 point)
     {
         if (player == null) return false;
         Vector3 origin = player.position + player.up * .25f;
@@ -220,24 +246,28 @@ public class DreamPuzzleController : MonoBehaviour
         return player != null && PlayerInGarden
             && Vector3.Distance(player.position, exitPosition) < interactionDistance;
     }
-    private DreamAnchor NearbyAnchor()
+    private DreamAnchor GetNearbyAnchor()
     {
         if (!initialized || player == null || !PlayerInGarden) return null;
         foreach (DreamAnchor anchor in anchors)
             if (anchor != null && Vector3.Distance(player.position, anchor.transform.position) < interactionDistance &&
-                Visible(anchor.transform, anchor.transform.position + anchor.transform.up * 1.6f)) return anchor;
+                HasLineOfSight(anchor.transform, anchor.transform.position + anchor.transform.up * 1.6f)) return anchor;
         return null;
     }
     private DreamLantern GetNearbyLantern()
     {
         DreamLantern nearest = null;
-        float best = interactionDistance * interactionDistance;
+        float nearestDistanceSquared = interactionDistance * interactionDistance;
         foreach (DreamLantern lantern in lanterns)
         {
             if (lantern == null) continue;
-            float distance = (lantern.transform.position - player.position).sqrMagnitude;
+            float distanceSquared = (lantern.transform.position - player.position).sqrMagnitude;
             Vector3 point = lantern.orbRenderer != null ? lantern.orbRenderer.bounds.center : lantern.transform.position + lantern.transform.up;
-            if (distance < best && Visible(lantern.transform, point)) { best = distance; nearest = lantern; }
+            if (distanceSquared < nearestDistanceSquared && HasLineOfSight(lantern.transform, point))
+            {
+                nearestDistanceSquared = distanceSquared;
+                nearest = lantern;
+            }
         }
         return nearest;
     }
@@ -255,58 +285,84 @@ public class DreamPuzzleController : MonoBehaviour
     private DreamInteraction GetNearbyInteraction()
     {
         DreamInteraction nearest = null;
-        float best = interactionDistance * interactionDistance;
+        float nearestDistanceSquared = interactionDistance * interactionDistance;
         foreach (DreamInteraction interaction in interactions)
         {
             if (interaction == null) continue;
-            float distance = (player.position - interaction.Focus).sqrMagnitude;
-            if (distance < best && Visible(interaction.transform, interaction.Focus))
-            { best = distance; nearest = interaction; }
+            float distanceSquared = (player.position - interaction.Focus).sqrMagnitude;
+            if (distanceSquared < nearestDistanceSquared && HasLineOfSight(interaction.transform, interaction.Focus))
+            {
+                nearestDistanceSquared = distanceSquared;
+                nearest = interaction;
+            }
         }
         return nearest;
     }
 
     private bool UseMechanism(DreamInteraction mechanism)
     {
-        if (mechanism.kind == DreamInteraction.Kind.Inscription)
-        {
-            dialogue.Open(player, mechanism.title, new[] { mechanism.inscription });
-            return true;
-        }
-        if (mechanism.kind == DreamInteraction.Kind.Keeper)
-        {
-            if (!isBloom) { ShowNotice("The Keeper is an echo in Ruin. Return in Bloom.", 4); return false; }
-            if (DreamProgression.KeeperRemembered)
-                dialogue.Open(player, "The Forgotten Keeper", new[] { "You have given the quiet its name. Carry it to the Moon pedestal. Some things return only when we cease calling them." });
-            else
-                dialogue.Open(player, "The Forgotten Keeper", new[] {
-                    "I kept the names of those who slept beneath these branches. Each spring, a petal was laid upon my door. Each winter, one name faded from the stone.",
-                    "When the last house emptied, the moon waited in our well. I promised to wake her when the garden spoke again. I have forgotten what she asked me to keep.",
-                    "I enter when the last voice leaves. A single spoken word breaks me. I fill an empty hall, yet weigh less than its dust. What am I? Type one word."
-                }, DreamProgression.AnswerKeeper, () => {
-                    mechanism.Refresh(isBloom);
-                    ShowNotice("The Keeper remembers. Restore the Moon at its pedestal [E].", 7);
-                });
-            return true;
-        }
         bool accepted;
-        if (mechanism.kind == DreamInteraction.Kind.Petal)
+        switch (mechanism.kind)
         {
-            accepted = DreamProgression.PressPetal(mechanism.index, isBloom);
-            ShowNotice(accepted ? "The garden remembers: " + DreamProgression.PetalSteps + " / 3 seals."
-                : "Moon must be restored first. Follow Root / Ruin > Dew / Bloom > Blossom / Ruin. Lit seals stay awake.", 5);
-        }
-        else
-        {
-            accepted = DreamProgression.PressAstral(mechanism.index, isBloom);
-            ShowNotice(accepted ? "The constellation answers: " + DreamProgression.AstralSteps + " / 4."
-                : memoriesCollected != 2 ? "Restore Petal before waking the constellation."
-                : !isBloom ? "The stars answer only in Bloom."
-                : "The constellation falls silent. Read the pilgrim's story and begin again.", 5);
+            case DreamInteraction.Kind.Inscription:
+                dialogue.Open(player, mechanism.title, new[] { mechanism.inscription });
+                return true;
+            case DreamInteraction.Kind.Keeper:
+                return SpeakToKeeper(mechanism);
+            case DreamInteraction.Kind.Petal:
+                accepted = PressPetalSeal(mechanism);
+                break;
+            default:
+                accepted = PressAstralSymbol(mechanism);
+                break;
         }
         foreach (DreamInteraction interaction in interactions) if (interaction != null) interaction.Refresh(isBloom);
         return accepted;
     }
 
-    private void ShowNotice(string value, float duration) { notice = value; noticeUntil = Time.unscaledTime + duration; }
+    private bool PressPetalSeal(DreamInteraction mechanism)
+    {
+        bool accepted = DreamProgression.PressPetal(mechanism.index, isBloom);
+        ShowNotice(accepted ? "The garden remembers: " + DreamProgression.PetalSteps + " / 3 seals."
+            : "Moon must be restored first. Follow Root / Ruin > Dew / Bloom > Blossom / Ruin. Lit seals stay awake.", 5);
+        return accepted;
+    }
+
+    private bool PressAstralSymbol(DreamInteraction mechanism)
+    {
+        bool accepted = DreamProgression.PressAstral(mechanism.index, isBloom);
+        string message = accepted ? "The constellation answers: " + DreamProgression.AstralSteps + " / 4." :
+            memoriesCollected != 2 ? "Restore Petal before waking the constellation." :
+            !isBloom ? "The stars answer only in Bloom." :
+            "The constellation falls silent. Read the pilgrim's story and begin again.";
+        ShowNotice(message, 5);
+        return accepted;
+    }
+
+    private bool SpeakToKeeper(DreamInteraction keeper)
+    {
+        if (!isBloom)
+        {
+            ShowNotice("The Keeper is an echo in Ruin. Return in Bloom.", 4);
+            return false;
+        }
+        if (DreamProgression.KeeperRemembered)
+            dialogue.Open(player, "The Forgotten Keeper", new[] { "You have given the quiet its name. Carry it to the Moon pedestal. Some things return only when we cease calling them." });
+        else
+            dialogue.Open(player, "The Forgotten Keeper", new[] {
+                "I kept the names of those who slept beneath these branches. Each spring, a petal was laid upon my door. Each winter, one name faded from the stone.",
+                "When the last house emptied, the moon waited in our well. I promised to wake her when the garden spoke again. I have forgotten what she asked me to keep.",
+                "I enter when the last voice leaves. A single spoken word breaks me. I fill an empty hall, yet weigh less than its dust. What am I? Type one word."
+            }, DreamProgression.AnswerKeeper, () => {
+                keeper.Refresh(isBloom);
+                ShowNotice("The Keeper remembers. Restore the Moon at its pedestal [E].", 7);
+            });
+        return true;
+    }
+
+    private void ShowNotice(string value, float duration)
+    {
+        notice = value;
+        noticeUntil = Time.unscaledTime + duration;
+    }
 }

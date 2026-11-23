@@ -1,50 +1,81 @@
+using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 public class DreamGardenHUD : MonoBehaviour
 {
     public DreamPuzzleController puzzle;
     public Planet1Puzzle firstPlanetPuzzle;
-    public DreamTravelPortal portal;
+    public DreamTravelPortal portal; // Kept for Inspector wiring; travel uses the scene portal.
     private GUIStyle title, line, center, button;
     private bool introductionShown;
     private bool introductionOpen;
-    private PlayerController suspendedController;
+    private readonly List<Behaviour> pausedBehaviours = new List<Behaviour>();
     private Rigidbody suspendedBody;
-    private bool controllerWasEnabled;
     private bool bodyWasKinematic;
     private CursorLockMode previousCursorLock;
     private bool previousCursorVisible;
 
     private void Update()
     {
+        SyncPlanet1Progress();
         if (introductionShown || introductionOpen || puzzle == null || !puzzle.Ready ||
             !puzzle.PlayerInGarden || puzzle.DialogueOpen || DreamSceneFlow.Busy) return;
-        // show only once per play session, after actually arriving on planet 2
+        OpenIntroduction();
+    }
+
+    private void SyncPlanet1Progress()
+    {
+        // Do not re-mark the flag after a restart reset while the old scene
+        // is still alive during DreamSceneFlow's asynchronous reload.
+        if (DreamSceneFlow.Busy) return;
+        // The portal flow unlocks on Planet1Puzzle completion but does not
+        // update the session flag used by the finale and the return portal.
+        if (firstPlanetPuzzle != null && firstPlanetPuzzle.IsComplete && !DreamProgression.Planet1Solved)
+            DreamProgression.MarkPlanet1Solved();
+    }
+
+    private void OpenIntroduction()
+    {
+        // Show once per HUD instance, after the player enters the garden.
         introductionShown = true;
         introductionOpen = true;
         puzzle.IntroOpen = true;
-        if (puzzle.player != null)
-        {
-            suspendedController = puzzle.player.GetComponent<PlayerController>();
-            suspendedBody = puzzle.player.GetComponent<Rigidbody>();
-            if (suspendedController != null)
-            {
-                controllerWasEnabled = suspendedController.enabled;
-                suspendedController.enabled = false;
-            }
-            if (suspendedBody != null)
-            {
-                bodyWasKinematic = suspendedBody.isKinematic;
-                suspendedBody.linearVelocity = Vector3.zero;
-                suspendedBody.angularVelocity = Vector3.zero;
-                suspendedBody.isKinematic = true;
-            }
-        }
+        PausePlayer();
+        // Capture the cursor once; CloseIntroduction restores exactly this state.
         previousCursorLock = Cursor.lockState;
         previousCursorVisible = Cursor.visible;
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
+    }
+
+    private void PausePlayer()
+    {
+        if (puzzle.player == null) return;
+        Pause(puzzle.player.GetComponent<PlayerController>());
+        Pause(puzzle.player.GetComponent<PlayerAttack>());
+        foreach (PlanetCamera camera in FindObjectsByType<PlanetCamera>())
+        {
+            if (camera.target != puzzle.player) continue;
+            Pause(camera);
+            Pause(camera.GetComponent<DreamCameraOcclusion>());
+        }
+        suspendedBody = puzzle.player.GetComponent<Rigidbody>();
+        if (suspendedBody == null) return;
+        bodyWasKinematic = suspendedBody.isKinematic;
+        if (!bodyWasKinematic)
+        {
+            suspendedBody.linearVelocity = Vector3.zero;
+            suspendedBody.angularVelocity = Vector3.zero;
+        }
+        suspendedBody.isKinematic = true;
+    }
+
+    private void Pause(Behaviour behaviour)
+    {
+        // Only re-enable controls this screen disabled, not controls already off.
+        if (behaviour == null || !behaviour.enabled) return;
+        pausedBehaviours.Add(behaviour);
+        behaviour.enabled = false;
     }
 
     private void CloseIntroduction()
@@ -52,10 +83,18 @@ public class DreamGardenHUD : MonoBehaviour
         if (!introductionOpen) return;
         introductionOpen = false;
         if (puzzle != null) puzzle.IntroOpen = false;
-        if (suspendedBody != null) suspendedBody.isKinematic = bodyWasKinematic;
-        if (suspendedController != null) suspendedController.enabled = controllerWasEnabled;
+        ResumePlayer();
         Cursor.lockState = previousCursorLock;
         Cursor.visible = previousCursorVisible;
+    }
+
+    private void ResumePlayer()
+    {
+        foreach (Behaviour behaviour in pausedBehaviours)
+            if (behaviour != null) behaviour.enabled = true;
+        pausedBehaviours.Clear();
+        if (suspendedBody != null) suspendedBody.isKinematic = bodyWasKinematic;
+        suspendedBody = null;
     }
 
     private void OnDisable() => CloseIntroduction();
@@ -64,20 +103,13 @@ public class DreamGardenHUD : MonoBehaviour
     {
         if (firstPlanetPuzzle == null)
             firstPlanetPuzzle = FindAnyObjectByType<Planet1Puzzle>();
+        SyncPlanet1Progress();
     }
 
     private void OnGUI()
     {
         if (DreamSceneFlow.Busy || (puzzle != null && puzzle.DialogueOpen)) return;
-        if (title == null)
-        {
-            title = new GUIStyle(GUI.skin.label) { fontSize = 18, fontStyle = FontStyle.Bold };
-            title.normal.textColor = new Color(1, .8f, .9f);
-            line = new GUIStyle(GUI.skin.label) { fontSize = 15, wordWrap = true };
-            line.normal.textColor = Color.white;
-            center = new GUIStyle(line) { alignment = TextAnchor.MiddleCenter };
-            button = new GUIStyle(GUI.skin.button) { fontSize = 16 };
-        }
+        if (title == null) InitializeStyles();
         Matrix4x4 oldMatrix = GUI.matrix;
         float scale = Mathf.Min(Screen.width / 960f, Screen.height / 600f);
         GUI.matrix = Matrix4x4.TRS(new Vector3((Screen.width - 960 * scale) / 2, (Screen.height - 600 * scale) / 2, 0), Quaternion.identity, Vector3.one * scale);
@@ -91,14 +123,25 @@ public class DreamGardenHUD : MonoBehaviour
         // the shared scene has two planets, so display the correct objective
         if (puzzle != null && puzzle.Ready && puzzle.PlayerInGarden) DrawGarden();
         else if (ReturnedToPlanet1AfterCompletion()) DrawJourneyEnding();
-        
-        if (!string.IsNullOrEmpty(DreamSceneFlow.LastError)) PanelMessage(DreamSceneFlow.LastError, 470);
+
+        if (!string.IsNullOrEmpty(DreamSceneFlow.LastError)) DrawPanelMessage(DreamSceneFlow.LastError, 470);
         GUI.matrix = oldMatrix;
         GUI.color = Color.white;
     }
+
+    private void InitializeStyles()
+    {
+        title = new GUIStyle(GUI.skin.label) { fontSize = 18, fontStyle = FontStyle.Bold };
+        title.normal.textColor = new Color(1, .8f, .9f);
+        line = new GUIStyle(GUI.skin.label) { fontSize = 15, wordWrap = true };
+        line.normal.textColor = Color.white;
+        center = new GUIStyle(line) { alignment = TextAnchor.MiddleCenter };
+        button = new GUIStyle(GUI.skin.button) { fontSize = 16 };
+    }
+
     private void DrawGardenIntroduction()
     {
-        Box(new Rect(145, 73, 670, 458));
+        DrawPanel(new Rect(145, 73, 670, 458));
         GUI.Label(new Rect(185, 100, 595, 42), "THE FORGOTTEN DREAM GARDEN", title);
         GUI.Label(new Rect(185, 155, 595, 112),
             "Beyond the last beacon lies a garden abandoned by time.\n" +
@@ -115,15 +158,15 @@ public class DreamGardenHUD : MonoBehaviour
             CloseIntroduction();
     }
 
-    private void Box(Rect rect)
+    private void DrawPanel(Rect rect)
     {
         GUI.color = new Color(.08f, .055f, .15f, .94f);
         GUI.DrawTexture(rect, Texture2D.whiteTexture);
         GUI.color = Color.white;
     }
-    private void PanelMessage(string message, float y)
+    private void DrawPanelMessage(string message, float y)
     {
-        Box(new Rect(100, y, 760, 58));
+        DrawPanel(new Rect(100, y, 760, 58));
         GUI.Label(new Rect(114, y + 5, 732, 48), message, center);
     }
     private bool ReturnedToPlanet1AfterCompletion()
@@ -139,41 +182,21 @@ public class DreamGardenHUD : MonoBehaviour
 
     private void DrawJourneyEnding()
     {
-        Box(new Rect(180, 170, 600, 300));
+        DrawPanel(new Rect(180, 170, 600, 300));
         GUI.Label(new Rect(200, 190, 560, 60), "THE STARS REMEMBER HOME", center);
         GUI.Label(new Rect(215, 260, 530, 95),
             "You restored the two planetary cores and returned home.\nThe worlds are reunited. Your journey is complete.", center);
-        if (Application.CanStreamedLevelBeLoaded("two_planets") &&
-            GUI.Button(new Rect(315, 390, 330, 45), "Restart campaign", button))
-            DreamSceneFlow.TryLoad("two_planets", true);
+        // The merged scene is not always present; reload the active scene instead.
+        string restartScene = Application.CanStreamedLevelBeLoaded("two_planets")
+            ? "two_planets"
+            : UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
+        if (GUI.Button(new Rect(315, 390, 330, 45), "Restart campaign", button))
+            DreamSceneFlow.TryLoad(restartScene, true);
     }
 
-    private void DrawFirstPlanetPlaceholder()
-    {
-        Box(new Rect(20, 20, 440, 130));
-        GUI.Label(new Rect(35, 30, 410, 30), "THE BEACON BETWEEN WORLDS", title);
-        GUI.Label(new Rect(35, 68, 405, 60),
-            "Find the crystals on Planet 1 to unlock the journey to the Dream Garden.", line);
-    }
-
-    private void DrawFirstPlanet()
-    {
-        Box(new Rect(20, 20, 440, 155));
-        GUI.Label(new Rect(35, 30, 410, 30), "THE BEACON BETWEEN WORLDS", title);
-        string objective = DreamProgression.Planet1Solved
-            ? "The first core is restored. Enter the portal to reach the Dream Garden."
-            : (!firstPlanetPuzzle.enabled
-                ? "Puzzle 1 is disabled in this scene. Enable it when ready."
-                : "Restore the beacon's power. Crystals: " + firstPlanetPuzzle.Collected + " / " + firstPlanetPuzzle.Total);
-        GUI.Label(new Rect(35, 68, 405, 90), objective, line);
-        if (portal != null && portal.IsNearby)
-            PanelMessage(DreamProgression.Planet1Solved ? "Enter the portal to travel to the Garden of Memories" : "The beacon still needs this planet's crystals.", 530);
-        else if (DreamProgression.Planet1Solved && portal != null && portal.player != null)
-            PanelMessage("Beacon: " + Mathf.RoundToInt(Vector3.Distance(portal.player.position, portal.transform.position)) + " m", 530);
-    }
     private void DrawGarden()
     {
-        Box(new Rect(20, 20, 440, 195));
+        DrawPanel(new Rect(20, 20, 440, 195));
         GUI.Label(new Rect(35, 30, 410, 30), "GARDEN OF MEMORIES", title);
         GUI.Label(new Rect(35, 68, 405, 30), "Dream: " + (puzzle.IsBloom ? "BLOOM" : "RUIN") + "   |   Memories: " + puzzle.MemoriesCollected + " / 3", line);
         string objective = puzzle.Finished ? "Return to the portal on Planet 2" : puzzle.NextMemory;
@@ -181,11 +204,11 @@ public class DreamGardenHUD : MonoBehaviour
         GUI.Label(new Rect(35, 172, 405, 30), puzzle.Finished ? "All memories restored. Find the return portal." : puzzle.ChallengeHint, line);
         if (puzzle.Finished)
         {
-            PanelMessage("Planet 2 complete! Return through the portal to Planet 1.\nQ: Shift at pedestals  |  R: Return to checkpoint", 460);
+            DrawPanelMessage("Planet 2 complete! Return through the portal to Planet 1.\nQ: Shift at pedestals  |  R: Return to checkpoint", 460);
             return;
         }
-        if (!string.IsNullOrEmpty(puzzle.Notice)) PanelMessage(puzzle.Notice, 460);
+        if (!string.IsNullOrEmpty(puzzle.Notice)) DrawPanelMessage(puzzle.Notice, 460);
         string hint = puzzle.GetInteractionHint();
-        if (!string.IsNullOrEmpty(hint)) PanelMessage(hint, 530);
+        if (!string.IsNullOrEmpty(hint)) DrawPanelMessage(hint, 530);
     }
 }
